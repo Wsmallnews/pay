@@ -10,17 +10,19 @@ use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentIcon;
 use Illuminate\Filesystem\Filesystem;
 use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Wsmallnews\Pay\Commands\PayCommand;
+use Wsmallnews\Pay\Components\PayMethods;
 use Wsmallnews\Pay\Testing\TestsPay;
 
 class PayServiceProvider extends PackageServiceProvider
 {
-    public static string $name = 'pay';
+    public static string $name = 'sn-pay';
 
-    public static string $viewNamespace = 'pay';
+    public static string $viewNamespace = 'sn-pay';
 
     public function configurePackage(Package $package): void
     {
@@ -58,7 +60,14 @@ class PayServiceProvider extends PackageServiceProvider
         }
     }
 
-    public function packageRegistered(): void {}
+    public function packageRegistered(): void 
+    {
+        // 未配置的支付
+        $this->app->singleton('sn-pay', function ($app) {
+            return new PayManager($app);
+        });
+
+    }
 
     public function packageBooted(): void
     {
@@ -85,6 +94,8 @@ class PayServiceProvider extends PackageServiceProvider
             }
         }
 
+        Livewire::component('sn-pay-methods', PayMethods::class);
+
         // Testing
         Testable::mixin(new TestsPay);
     }
@@ -101,8 +112,8 @@ class PayServiceProvider extends PackageServiceProvider
     {
         return [
             // AlpineComponent::make('pay', __DIR__ . '/../resources/dist/components/pay.js'),
-            Css::make('pay-styles', __DIR__ . '/../resources/dist/pay.css'),
-            Js::make('pay-scripts', __DIR__ . '/../resources/dist/pay.js'),
+            // Css::make('pay-styles', __DIR__ . '/../resources/dist/pay.css'),
+            // Js::make('pay-scripts', __DIR__ . '/../resources/dist/pay.js'),
         ];
     }
 
