@@ -2,49 +2,38 @@
 
 namespace Wsmallnews\Pay;
 
-use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Wsmallnews\Pay\Contracts\PayableInterface;
-use Wsmallnews\Pay\Exceptions\PayException;
 use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
 use Wsmallnews\Pay\Models\Refund as RefundModel;
-use Wsmallnews\Pay\Enums;
 
 class PayRecord
 {
-
     protected $pay_type = null;
 
     /**
      * payOperator
-     *
-     * @var PayOperator
      */
     protected PayOperator $payOperator;
 
     /**
      * payable
-     *
-     * @var PayableInterface
      */
     protected PayableInterface $payable;
 
-    public function __construct(PayOperator $payOperator, PayableInterface $payable = null)
+    public function __construct(PayOperator $payOperator, ?PayableInterface $payable = null)
     {
         $this->payOperator = $payOperator;
 
         $this->payable = $payable;
     }
 
-
-
     /**
      * 添加 pay 记录
      *
-     * @param think\Model $order
-     * @param array $params
+     * @param  think\Model  $order
+     * @param  array  $params
      * @return think\Model
      */
     public function addPay($params)
@@ -52,7 +41,7 @@ class PayRecord
         $user = $this->payOperator->getUser() ?? null;
         $user_mark = $this->payOperator->getUserMark() ?? '';
 
-        $payModel = new PayRecordModel();
+        $payModel = new PayRecordModel;
 
         // $payModel->scope_type = $this->orderAdapter->getScopeType();
         // $payModel->store_id = $this->orderAdapter->getStoreId();
@@ -74,9 +63,6 @@ class PayRecord
         return $payModel;
     }
 
-
-
-
     public function notifyOk($record, $params)
     {
         // 支付毁掉，填充支付渠道信息
@@ -90,7 +76,6 @@ class PayRecord
         return $record;
     }
 
-
     /**
      * 增加退款金额
      */
@@ -99,7 +84,6 @@ class PayRecord
         $payRecord->refunded_fee = DB::raw('refunded_fee + ' . $refund->refund_fee);        // @sn todo 看下文档，然后测试一下， 保存成功之后， refunded_fee 字段变成了啥
         $payRecord->save();
     }
-
 
     /**
      * 检查当前 pay 记录是否退款完成
@@ -118,13 +102,10 @@ class PayRecord
         return $payRecord;
     }
 
-
-
     /**
      * 添加 pay 记录
      *
-     * @param PayRecordModel $payRecord
-     * @param array $params
+     * @param  array  $params
      * @return RefundModel
      */
     public function addRefund(PayRecordModel $payRecord, $refund_amount, $params)
@@ -149,7 +130,7 @@ class PayRecord
             }
         }
 
-        $refund = new RefundModel();
+        $refund = new RefundModel;
         // $refund->scope_type = $pay->scope_type;
         // $refund->store_id = $pay->store_id;
         $refund->pay_record_id = $payRecord->id;
@@ -170,12 +151,10 @@ class PayRecord
         return $refund;
     }
 
-
-
     /**
      * 完成退款单
      *
-     * @param \think\Model $refund
+     * @param  \think\Model  $refund
      * @return \think\Model
      */
     public function refundCompleted($refund, $params = [])
@@ -188,13 +167,11 @@ class PayRecord
         return $refund;
     }
 
-
-
     /**
      * 获取订单已支付金额，商城订单 计算 积分抵扣金额
      *
-     * @param \think\Model $order
-     * @param string $order_type
+     * @param  \think\Model  $order
+     * @param  string  $order_type
      * @return string
      */
     // public function getPaidFee()
@@ -225,8 +202,6 @@ class PayRecord
     //     return $paid_fee;
     // }
 
-
-
     // public function getAllPaidPays($is_lock = true)
     // {
     //     $table_type = $this->orderAdapter->getType();
@@ -238,8 +213,6 @@ class PayRecord
 
     //     return $pays;
     // }
-
-
 
     // /**
     //  * 获取剩余可退款的pays 记录（不含积分抵扣）
@@ -277,8 +250,6 @@ class PayRecord
 
     //     return $pays;
     // }
-
-
 
     // /**
     //  * 获取剩余可退款金额，不含积分相关支付

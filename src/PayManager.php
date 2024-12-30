@@ -11,39 +11,29 @@ use Wsmallnews\Support\AdapterManager;
 
 class PayManager extends AdapterManager
 {
-
-
     /**
      * payable
-     *
-     * @var PayableInterface
      */
     protected PayableInterface $payable;
 
-
     /**
      * payConfig
-     *
-     * @var PayConfigInterface
      */
     protected PayConfigInterface $payConfig;
-
 
     public function setPayable(PayableInterface $payable)
     {
         $this->payable = $payable;
+
         return $this;
     }
-
-
 
     public function getPayable(PayableInterface $payable)
     {
         $this->payable = $payable;
+
         return $this;
     }
-
-
 
     /**
      * 设置三方支付配置类
@@ -54,9 +44,9 @@ class PayManager extends AdapterManager
     public function setPayConfig(PayConfigInterface $payConfig)
     {
         $this->payConfig = $payConfig;
+
         return $this;
     }
-
 
     /**
      * 设置三方支付配置类
@@ -67,8 +57,6 @@ class PayManager extends AdapterManager
     {
         return $this->payConfig;
     }
-
-
 
     /**
      * 创建一个 wechat 发货实例
@@ -84,7 +72,6 @@ class PayManager extends AdapterManager
         return new PayOperator($adapter, $this->payable);
     }
 
-
     public function createMoneyDriver()
     {
         $adapter = new MoneyAdapter($this, $this->payConfig);
@@ -92,20 +79,16 @@ class PayManager extends AdapterManager
         return new PayOperator($adapter, $this->payable);
     }
 
-
-
     public function __call($method, $parameters)
     {
         $driver = $parameters[0] ?? '';
-        if (!$driver) {
+        if (! $driver) {
             throw new PayException('驱动不存在');
         }
         unset($parameters[0]);
 
         return $this->driver($driver)->$method(...$parameters);
     }
-
-
 
     /**
      * Get the default driver name.
@@ -116,8 +99,6 @@ class PayManager extends AdapterManager
     {
         return '';
     }
-
-
 
     /**
      * Get the filesystem connection configuration.

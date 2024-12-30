@@ -60,7 +60,7 @@ class PayServiceProvider extends PackageServiceProvider
         }
     }
 
-    public function packageRegistered(): void 
+    public function packageRegistered(): void
     {
         // 未配置的支付
         $this->app->singleton('sn-pay', function ($app) {

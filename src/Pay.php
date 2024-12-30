@@ -6,14 +6,10 @@ use Wsmallnews\Pay\Contracts\PayConfigInterface;
 
 class Pay
 {
-
     /**
      * payConfig
-     *
-     * @var PayConfigInterface
      */
     protected PayConfigInterface $payConfig;
-
 
     /**
      * 设置三方支付配置类
@@ -24,9 +20,9 @@ class Pay
     public function setConfig(PayConfigInterface $payConfig)
     {
         $this->payConfig = $payConfig;
+
         return $this;
     }
-
 
     /**
      * 设置三方支付配置类
@@ -37,8 +33,4 @@ class Pay
     {
         return $this->payConfig;
     }
-
-
-    
-
 }

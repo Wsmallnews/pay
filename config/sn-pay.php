@@ -3,7 +3,6 @@
 // config for Wsmallnews/Pay
 return [
 
-
     /*
      * Model name for user.
      */

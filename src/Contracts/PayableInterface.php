@@ -2,7 +2,6 @@
 
 namespace Wsmallnews\Pay\Contracts;
 
-
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -10,22 +9,15 @@ use Illuminate\Database\Eloquent\Model;
  */
 interface PayableInterface
 {
-
     /**
      * payable 的 type
-     *
-     * @return string
      */
     public function morphType(): string;
 
-
     /**
      * payable 的 id
-     *
-     * @return int
      */
     public function morphId(): int;
-
 
     /**
      * payable 的 Options
@@ -34,34 +26,20 @@ interface PayableInterface
      */
     public function morphOptions(): array;
 
-
-
-
-
     /**
      * 是否已支付 （包含退款的订单，不包含货到付款的）
-     *
-     * @return boolean
      */
     public function isPaid(): bool;
 
-
     /**
      * 获取订单剩余应支付金额
-     *
-     * @return string
      */
     public function getRemainPayFee(): string;
 
-
     /**
      * 检测是否支付
-     *
-     * @return Model
      */
     public function checkAndPaid(): Model;
-
-
 
     // /**
     //  * 获取订单
@@ -70,7 +48,6 @@ interface PayableInterface
     //  */
     // public function getOrder(): Model;
 
-
     // /**
     //  * 获取 scopeType
     //  *
@@ -78,14 +55,12 @@ interface PayableInterface
     //  */
     // public function getScopeType(): string;
 
-
     // /**
     //  * 获取下单店铺
     //  *
     //  * @return int
     //  */
     // public function getStoreId(): int;
-
 
     // /**
     //  * 获取下单用户 id
@@ -101,14 +76,12 @@ interface PayableInterface
     //  */
     // public function getUser(): ?Model;
 
-
     // /**
     //  * 获取订单id
     //  *
     //  * @return int
     //  */
     // public function getOrderId(): int;
-
 
     // /**
     //  * 获取订单id
@@ -117,14 +90,12 @@ interface PayableInterface
     //  */
     // public function getOrderSn(): string;
 
-
     // /**
     //  * 获取订单类型
     //  *
     //  * @return string
     //  */
     // public function getOrderType(): string;
-
 
     // /**
     //  * 获取订单的收货地址
@@ -133,7 +104,6 @@ interface PayableInterface
     //  */
     // public function getAddress(): ?Model;
 
-
     // /**
     //  * 获取订单的发票
     //  *
@@ -141,14 +111,12 @@ interface PayableInterface
     //  */
     // public function getInvoice(): ?Model;
 
-
     // /**
     //  * 获取订单应支付金额
     //  *
     //  * @return string
     //  */
     // public function getPayFee(): string;
-
 
     // /**
     //  * 获取订单应支付积分
@@ -164,10 +132,6 @@ interface PayableInterface
     //  */
     // public function getPaidFee(): string;
 
-
-
-
-
     // /**
     //  * 获取订单剩余可退款金额
     //  *
@@ -175,16 +139,12 @@ interface PayableInterface
     //  */
     // public function getRemainRefundMoney(): string;
 
-
-
-
     // /**
     //  * 主订单是否可发货
     //  *
     //  * @return boolean
     //  */
     // public function isCanSend(): bool;
-
 
     // /**
     //  * 订单项发货
@@ -196,7 +156,6 @@ interface PayableInterface
     //  */
     // public function send($relate, $data = [], $msg = ''): Model;
 
-
     // /**
     //  * 订单本次发货完成
     //  *
@@ -206,10 +165,6 @@ interface PayableInterface
     //  * @return Void
     //  */
     // public function currentSendCompleted($delivery_type, $data, $msg = ''): Void;
-
-
-
-
 
     // /**
     //  * 订单项取消发货
@@ -221,7 +176,6 @@ interface PayableInterface
     //  */
     // public function sendCancel($relate, $msg = ''): Model;
 
-
     // /**
     //  * 订单本次取消发货完成
     //  *
@@ -232,13 +186,10 @@ interface PayableInterface
     //  */
     // public function currentSendCancel($delivery_type, $data, $msg = ''): Void;
 
-
-
     // /**
     //  * 关联项退款
     //  */
     // public function refund($relate, $data = [], $msg = '');
-
 
     // /**
     //  * 本次的所有 relates 退款完成

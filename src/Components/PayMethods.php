@@ -2,22 +2,19 @@
 
 namespace Wsmallnews\Pay\Components;
 
-use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
 use Livewire\Component;
 use Wsmallnews\Support\Concerns\HasColumns;
 
-class PayMethods extends Component implements HasForms, HasActions
+class PayMethods extends Component implements HasActions, HasForms
 {
-
+    use HasColumns;
     use InteractsWithActions;
     use InteractsWithForms;
-    use HasColumns;
 
     public ?Model $user;
 
@@ -26,18 +23,18 @@ class PayMethods extends Component implements HasForms, HasActions
     public $supportPayMethods = [
         [
             'label' => '余额支付',
-            'value' =>  'money',
-            'icon' => '/tempimg/200.jpg'
+            'value' => 'money',
+            'icon' => '/tempimg/200.jpg',
         ],
         [
             'label' => '支付宝支付',
-            'value' =>  'alipay',
-            'icon' => '/tempimg/200.jpg'
+            'value' => 'alipay',
+            'icon' => '/tempimg/200.jpg',
         ],
         [
             'label' => '微信支付',
-            'value' =>  'wechat',
-            'icon' => '/tempimg/200.jpg'
+            'value' => 'wechat',
+            'icon' => '/tempimg/200.jpg',
         ],
     ];
 
@@ -49,8 +46,6 @@ class PayMethods extends Component implements HasForms, HasActions
     {
         $this->columns($columns);
     }
-
-
 
     public function render()
     {

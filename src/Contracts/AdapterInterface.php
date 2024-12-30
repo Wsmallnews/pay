@@ -10,22 +10,14 @@ use Wsmallnews\Pay\Models\Refund;
  */
 interface AdapterInterface
 {
-
-    /**
-     * @return string
-     */
     public function getType(): string;
-
 
     /**
      * 支付
      *
-     * @param float|string $amount
-     * @return array
+     * @param  float|string  $amount
      */
     public function pay($amount): array;
-
-
 
     public function refund(PayRecord $payRecord, Refund $refund);
 }

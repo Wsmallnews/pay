@@ -4,17 +4,15 @@ namespace Wsmallnews\Pay\Adapters;
 
 use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Enums;
-use Wsmallnews\Pay\Exceptions\ExpressException;
-use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
 use Wsmallnews\Pay\PayManager;
 
 class MoneyAdapter implements AdapterInterface
 {
-
     /**
      * @var User
      */
     protected $user = null;
+
     protected $user_mark = null;
 
     /**
@@ -32,17 +30,13 @@ class MoneyAdapter implements AdapterInterface
         // $this->user_mark = $payManager->getUserMark();
     }
 
-
     /**
      * 获取当前驱动名
-     *
-     * @return string
      */
     public function getType(): string
     {
         return 'money';
     }
-
 
     public function pay($money = null): array
     {
@@ -56,12 +50,9 @@ class MoneyAdapter implements AdapterInterface
         return [
             'pay_fee' => $money,
             'real_fee' => $money,
-            'pay_status' => Enums\PayStatus::Paid
+            'pay_status' => Enums\PayStatus::Paid,
         ];
     }
-
-
-
 
     public function refund($payRecord, $refund)
     {
@@ -79,11 +70,8 @@ class MoneyAdapter implements AdapterInterface
         return [
             'refunded_fee' => $refund->refunded_fee,
             'real_refunded_fee' => $refund->refunded_fee,
-            'refund_status' => Enums\RefundStatus::Completed
+            'refund_status' => Enums\RefundStatus::Completed,
         ];
-
-
-
 
     }
 }

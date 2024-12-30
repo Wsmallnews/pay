@@ -19,11 +19,11 @@ use Yansongda\Pay\Pay as YansongdaPay;
 
 class WechatAdapter implements AdapterInterface, ThirdInterface
 {
-
     /**
      * @var User
      */
     protected $user = null;
+
     protected $user_mark = null;
 
     /**
@@ -55,17 +55,13 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
         // $this->wechatAdapter = new WechatAdapter();
     }
 
-
     /**
      * 获取当前驱动名
-     *
-     * @return string
      */
     public function getType(): string
     {
         return 'wechat';
     }
-
 
     public function pay($money = null): array
     {
@@ -75,7 +71,6 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             'pay_status' => Enums\PayStatus::Unpaid,
         ];
     }
-
 
     /**
      * 预支付
@@ -98,7 +93,7 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             'payer' => [
                 'openid' => $params['openid'] ?? '',
             ],
-            'description' => $params['description'] ?? '商城订单支付'
+            'description' => $params['description'] ?? '商城订单支付',
         ];
 
         if (isset($payConfig['mode']) && $payConfig['mode'] === 2) {        // 服务商模式
@@ -114,7 +109,7 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
                 'payer_client_ip' => request()->ip(),
                 'h5_info' => [
                     'type' => 'Wap',
-                ]
+                ],
             ];
         }
 
@@ -123,7 +118,6 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
 
         return YansongdaPay::wechat()->$payMethod($orderData);
     }
-
 
     /**
      * 支付回调
@@ -175,7 +169,7 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
                 if (isset($data['trade_state']) && $data['trade_state'] == 'SUCCESS') {
                     // 交易成功
                     $data['pay_fee'] = bcdiv($data['amount']['total'], 100, 2);
-                    $data['notify_time'] = date('Y-m-d H:i:s', strtotime((string)$data['success_time']));
+                    $data['notify_time'] = date('Y-m-d H:i:s', strtotime((string) $data['success_time']));
                     $data['buyer_info'] = $data['payer']['openid'] ?? ($data['payer']['sub_openid'] ?? '');
 
                     $result = $callback($data, $originData);
@@ -188,21 +182,21 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             } else {
                 // 微信交易未成功，返回 false，让微信再次通知
                 Log::error('wechatpay_notify_error:交易未成功:' . $originData['event_type']);
+
                 return 'fail';
             }
         } catch (\Exception $e) {
             exception_log($e, 'wechatpay_notify');
+
             return 'fail';
         }
     }
 
-
-
     /**
      * 回调成功
      *
-     * @param \think\Model $pay
-     * @param array $params
+     * @param  \think\Model  $pay
+     * @param  array  $params
      * @return \think\Model
      */
     public function notifyOk($payRecord, $params)
@@ -212,14 +206,11 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
         return $payRecord;
     }
 
-
-
     /**
      * 微信退款
      *
-     * @param \think\Model $pay
-     * @param \think\Model $refund
-     *
+     * @param  \think\Model  $pay
+     * @param  \think\Model  $refund
      * @return mixed
      */
     public function refund($payRecord, $refund)
@@ -232,7 +223,7 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             'amount' => [
                 'refund' => intval(bcmul($refund->refund_fee, '100')),
                 'total' => intval(bcmul($payRecord->pay_fee, '100')),
-                'currency' => 'CNY'
+                'currency' => 'CNY',
             ],
             'reason' => $refund->remark,
         ];
@@ -265,7 +256,7 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
         //     "user_received_account": "\u652f\u4ed8\u7528\u6237\u96f6\u94b1"
         // }
 
-        if (!isset($result['status']) || !in_array($result['status'], ['SUCCESS', 'PROCESSING'])) {
+        if (! isset($result['status']) || ! in_array($result['status'], ['SUCCESS', 'PROCESSING'])) {
             // 微信返回的状态会是 PROCESSING
             throw new PayException('退款失败:' . (isset($result['message']) ? $result['message'] : json_encode($result, JSON_UNESCAPED_UNICODE)));
         }
@@ -273,10 +264,9 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
         return [
             'refunded_fee' => $refund->refunded_fee,
             'real_refunded_fee' => $refund->refunded_fee,
-            'refund_status' => Enums\RefundStatus::Ing
+            'refund_status' => Enums\RefundStatus::Ing,
         ];
     }
-
 
     /**
      * 退款回调
@@ -332,20 +322,21 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             } else {
                 // 微信交易未成功，返回 false，让微信再次通知
                 Log::error('wechatpay_notify_error:退款未成功:' . $originData['event_type']);
+
                 return 'fail';
             }
         } catch (\Exception $e) {
             exception_log($e, 'wechatpay_refund_notify');
+
             return 'fail';
         }
     }
 
-
     /**
      * 退款回调成功
      *
-     * @param \think\Model $refund
-     * @param array $params
+     * @param  \think\Model  $refund
+     * @param  array  $params
      * @return \think\Model
      */
     public function refundNotifyOk($refund, $params)

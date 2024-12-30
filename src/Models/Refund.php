@@ -2,15 +2,12 @@
 
 namespace Wsmallnews\Pay\Models;
 
-use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Wsmallnews\Pay\Enums;
-use Wsmallnews\Support\Models\SupportModel;
 use Wsmallnews\Support\Casts\MoneyCast;
+use Wsmallnews\Support\Models\SupportModel;
 
 class Refund extends SupportModel
 {
-
     protected $table = 'sn_pay_records';
 
     protected $guarded = [];
@@ -31,8 +28,6 @@ class Refund extends SupportModel
 
         // 'paid_at' => 'timestamp',
     ];
-
-
 
     public function user()
     {

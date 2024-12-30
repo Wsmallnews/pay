@@ -2,13 +2,12 @@
 
 namespace Wsmallnews\Pay\Enums;
 
-use Filament\Support\Contracts\HasLabel;
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
 use Wsmallnews\Support\Enums\Traits\EnumHelper;
 
-Enum PayStatus :string implements HasColor, HasLabel
+enum PayStatus: string implements HasColor, HasLabel
 {
-
     use EnumHelper;
 
     case Unpaid = 'unpaid';
@@ -26,7 +25,6 @@ Enum PayStatus :string implements HasColor, HasLabel
         };
     }
 
-
     public function getColor(): string | array | null
     {
         return match ($this) {
@@ -35,5 +33,4 @@ Enum PayStatus :string implements HasColor, HasLabel
             self::Refunded => 'danger',
         };
     }
-
 }

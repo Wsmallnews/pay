@@ -8,28 +8,21 @@ use Illuminate\Support\Facades\Auth;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\ThirdInterface;
-use Wsmallnews\Pay\Enums;
 use Wsmallnews\Pay\Exceptions\PayException;
 
 class PayOperator
 {
-
     protected $user = null;
 
     protected string $user_mark = '';
 
-
     /**
      * adapter
-     *
-     * @var AdapterInterface
      */
     protected AdapterInterface $adapter;
 
     /**
      * payable
-     *
-     * @var PayableInterface
      */
     protected PayableInterface $payable;
 
@@ -43,7 +36,7 @@ class PayOperator
     /**
      * 实例化
      *
-     * @param mixed $user
+     * @param  mixed  $user
      */
     public function __construct(AdapterInterface $adapter, PayableInterface $payable)
     {
@@ -54,7 +47,6 @@ class PayOperator
         $this->payRecord = new PayRecord($this, $payable);
     }
 
-
     public function setUser($user = null)
     {
         // 优先使用传入的用户
@@ -62,8 +54,6 @@ class PayOperator
 
         $this->user_mark = $this->user ? $this->user->id : (mt_rand(10, 99) . 'n' . mt_rand(100, 999));
     }
-
-
 
     /**
      * 获取付款用户
@@ -75,7 +65,6 @@ class PayOperator
         return $this->user;
     }
 
-
     /**
      * 获取用户标记
      *
@@ -86,13 +75,11 @@ class PayOperator
         return $this->user_mark;
     }
 
-
-
     /**
      * 支付
      *
-     * @param string $driver    支付渠道
-     * @param string  $money    支付金额
+     * @param  string  $driver  支付渠道
+     * @param  string  $money  支付金额
      * @return object
      */
     public function pay($amount = null)
@@ -122,7 +109,7 @@ class PayOperator
             'real_fee' => $adapterResult['real_fee'],
             'transaction_id' => null,
             'payment_json' => [],
-            'status' => $adapterResult['pay_status'] ?? Enums\PayStatus::Unpaid
+            'status' => $adapterResult['pay_status'] ?? Enums\PayStatus::Unpaid,
         ]);
 
         if ($payRecord->status == Enums\PayStatus::Paid) {
@@ -133,44 +120,40 @@ class PayOperator
         return $payRecord;
     }
 
-
     /**
      * 三方支付预付款
      */
     public function thirdPrepay($payRecord, $params = [])
     {
-        if (!$this->adapter instanceof ThirdInterface) {
+        if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持预付款');
         }
 
         return $this->adapter->prepay($payRecord, $params);
     }
 
-
-
     /**
      * 三方渠道支付回调
      *
-     * @param object $pay
-     * @param array $notify
+     * @param  object  $pay
+     * @param  array  $notify
      * @return object
      */
     public function thirdNotify($driver, Closure $callback)
     {
-        if (!$this->adapter instanceof ThirdInterface) {
+        if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持回调');
         }
 
         return $this->adapter->notify($callback);
     }
 
-
     /**
      * 三方支付回调成功
      */
     public function thirdNotifyOk($payRecord, $params = [])
     {
-        if (!$this->adapter instanceof ThirdInterface) {
+        if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持回调');
         }
 
@@ -180,14 +163,12 @@ class PayOperator
         $payRecord = $this->payRecord->notifyOk($payRecord, $params);
 
         // 检测支付
-        if (!$this->payable->isPaid()) {
+        if (! $this->payable->isPaid()) {
             $this->payable->checkAndPaid();
         }
 
         return $payRecord;
     }
-
-
 
     /**
      * 退款
@@ -195,7 +176,6 @@ class PayOperator
     public function refund($payRecord, $refund_amount = null, $params = [])
     {
         // @sn todo 这里可以判断下 payRecord 是否已经退完了 （考虑性添加）
-
 
         // 如果 refund_money = null 那就是全部退
         $refund_amount = is_null($refund_amount) ? $payRecord->pay_fee : $refund_amount;
@@ -222,7 +202,6 @@ class PayOperator
 
         return $refund;
 
-
         // $refund = $this->payRecord->addRefund($payRecord, array_merge($data, [
         //     'user_mark' => $this->user_mark,
         // ]), $refund_money);
@@ -244,25 +223,21 @@ class PayOperator
         // return $refund;
     }
 
-
-
     public function thirdRefundNotify(Closure $callback)
     {
-        if (!$this->adapter instanceof ThirdInterface) {
+        if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持退款回调');
         }
 
         return $this->adapter->refundNotify($callback);
     }
 
-
-
     /**
      * 三方退款回调成功
      */
     public function thirdRefundNotifyOk($refund, $params = [])
     {
-        if (!$this->adapter instanceof ThirdInterface) {
+        if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持回调');
         }
 
@@ -270,7 +245,7 @@ class PayOperator
 
         // 完成退款单
         $refund = $this->payRecord->refundCompleted($refund, $params);
+
         return $refund;
     }
-
 }

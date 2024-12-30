@@ -2,49 +2,37 @@
 
 namespace Wsmallnews\Pay;
 
-use Wsmallnews\Pay\Adapters\WechatAdapter;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayConfigInterface;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Support\AdapterManager;
 
 class RefundManager
 {
-
     // @sn todo 等写到退款时候再补充吧
-
 
     /**
      * payable
-     *
-     * @var PayableInterface
      */
     protected PayableInterface $payable;
 
-
     /**
      * payConfig
-     *
-     * @var PayConfigInterface
      */
     protected PayConfigInterface $payConfig;
-
 
     public function setPayable(PayableInterface $payable)
     {
         $this->payable = $payable;
+
         return $this;
     }
-
-
 
     public function getPayable(PayableInterface $payable)
     {
         $this->payable = $payable;
+
         return $this;
     }
-
-
 
     /**
      * 设置三方支付配置类
@@ -55,9 +43,9 @@ class RefundManager
     public function setPayConfig(PayConfigInterface $payConfig)
     {
         $this->payConfig = $payConfig;
+
         return $this;
     }
-
 
     /**
      * 设置三方支付配置类
@@ -69,11 +57,10 @@ class RefundManager
         return $this->payConfig;
     }
 
-
     /**
      * 全额退款
-     * @param array $data
      *
+     * @param  array  $data
      * @return void
      */
     public function fullRefund($data)
@@ -88,14 +75,10 @@ class RefundManager
         }
     }
 
-
-
-
     /**
      * 退款指定金额 （不退积分，包括积分抵扣的积分）
      *
-     * @param string $refund_money
-     * @param string $remark
+     * @param  string  $remark
      * @return void
      */
     public function refund(string $refund_money, $data = [])
@@ -138,17 +121,7 @@ class RefundManager
         }
     }
 
-
-
-
-
-
-
-
-
-
     // protected $user = null;
-
 
     // /**
     //  * 订单适配器
@@ -163,7 +136,7 @@ class RefundManager
 
     // /**
     //  * 三方支付配置类实例
-    //  * 
+    //  *
     //  * @var ThirdPayConfigInterface
     //  */
     // protected $thirdPayConfig = null;
@@ -185,10 +158,9 @@ class RefundManager
     //     $this->payManager = new PayManager($this->orderAdapter, $this->user);
     // }
 
-
     // /**
     //  * 设置支付配置类
-    //  * 
+    //  *
     //  * @param ThirdPayConfigInterface|Closure $payConfigManager
     //  */
     // public function setThirdPayConfig($thirdPayConfig)
@@ -197,12 +169,10 @@ class RefundManager
     //     return $this;
     // }
 
-
     // public function getThirdPayConfig($pay)
     // {
     //     return $this->thirdPayConfig instanceof Closure ? ($this->thirdPayConfig)($pay) : $this->thirdPayConfig;
     // }
-
 
     // /**
     //  * 全额退款
@@ -221,9 +191,6 @@ class RefundManager
     //         $this->payManager->refund($pay, $data);
     //     }
     // }
-
-
-
 
     // /**
     //  * 退款指定金额 （不退积分，包括积分抵扣的积分）
