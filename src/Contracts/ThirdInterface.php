@@ -13,8 +13,6 @@ interface ThirdInterface
 
     public function notify(Closure $callback);
 
-    public function notifyOk($pay, $params);
-
     public function refundNotify(Closure $callback);
 
     public function refundNotifyOk($refund, $params);

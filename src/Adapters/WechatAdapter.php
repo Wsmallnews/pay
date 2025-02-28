@@ -3,29 +3,20 @@
 namespace Wsmallnews\Pay\Adapters;
 
 use Closure;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
-use Wsmallnews\Pay\Contracts\PayConfigInterface;
+use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Contracts\ThirdInterface;
+use Wsmallnews\Pay\Features\YansongdaPayConfig;
 use Wsmallnews\Pay\Enums;
 use Wsmallnews\Pay\Exceptions\PayException;
 use Wsmallnews\Pay\PayManager;
+use Yansongda\Artful\Contract\LoggerInterface;
 use Yansongda\Pay\Pay as YansongdaPay;
-
-// use addons\estore\package\delivery\{
-//     service\WechatDeliveryService,
-//     model\ExpressPackage,
-// };
 
 class WechatAdapter implements AdapterInterface, ThirdInterface
 {
-    /**
-     * @var User
-     */
-    protected $user = null;
-
-    protected $user_mark = null;
-
     /**
      * payManager
      *
@@ -33,57 +24,71 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
      */
     protected $payManager = null;
 
-    // protected $wechatAdapter = null;
 
     /**
-     * @var PayConfigInterface
+     * @var YansongdaPayConfig
      */
     protected $payConfig = null;
 
     public function __construct(PayManager $payManager)
     {
-        // $this->orderAdapter = $payManager->getOrderAdapter();        // 不能再这里获取 orderAdapter, 因为 微信支付回调通知时，无法提供 orderAdapter,导致这里获取失败
-
         $this->payManager = $payManager;
 
-        $this->payConfig = $payManager->getPayConfig();
+        $config = $payManager->getConfig('wechat');
 
-        // $this->user = $payManager->getUser();
-        // $this->user_mark = $payManager->getUserMark();
-        // $this->thirdPayConfig = $payManager->getThirdPayConfig();
+        $this->payConfig = new YansongdaPayConfig($this->getType(), $config);
 
-        // $this->wechatAdapter = new WechatAdapter();
+        // 配置支付参数
+        YansongdaPay::config(array_merge($this->payConfig->getFinalConfig(), ['_force' => true]));      // 强制使用配置
+
+        YansongdaPay::set(LoggerInterface::class, function () {
+            return app()->make('log')->channel(config('sn-pay.logger'));
+        });
     }
 
     /**
      * 获取当前驱动名
+     * 
+     * @return string
      */
     public function getType(): string
     {
         return 'wechat';
     }
 
-    public function pay($money = null): array
+
+    /**
+     * 付款
+     *
+     * @param string $amount
+     * @return array
+     */
+    public function pay($amount = null): array
     {
         return [
-            'pay_fee' => $money,
-            'real_fee' => $money,
+            'pay_fee' => $amount,
+            'real_fee' => $amount,
             'pay_status' => Enums\PayStatus::Unpaid,
         ];
     }
 
+
+
     /**
      * 预支付
+     * 
+     * @param Model $payRecord
+     * @param array $params
+     * @return mixed
      */
     public function prepay($payRecord, $params)
     {
-        // $params = ['openid','description'];      // params 字段
+        // $params = ['_config', 'endpoint', 'openid','description', 'notify_url'];      // params 字段
 
         // 获取干净的支付参数
-        $payConfig = $this->payConfig->getPayConfig($this->getType());
+        $payConfig = $this->payConfig->getPayConfig($params['_config'] ?? 'default');
 
-        // 获取支付方法名
-        $payMethod = $this->payConfig->getPayMethod($this->getType());
+        $endpoint = $params['endpoint'] ?? 'mini';        // 默认小程序支付
 
         $orderData = [
             'out_trade_no' => $payRecord->pay_sn,       // 商户订单号
@@ -94,16 +99,22 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
                 'openid' => $params['openid'] ?? '',
             ],
             'description' => $params['description'] ?? '商城订单支付',
+            '_config' => $params['_config'] ?? 'default',            // 多租户，切换配置
         ];
 
-        if (isset($payConfig['mode']) && $payConfig['mode'] === 2) {        // 服务商模式
-            if (in_array($payMethod, ['mp', 'mini'])) {     // 公众号，或者小程序支付
+        if (isset($params['notify_url']) && $params['notify_url']) {
+            // 优先使用传入的 notify_url
+            $orderData['notify_url'] = $params['notify_url'];
+        }
+
+        if (isset($payConfig['mode']) && $payConfig['mode'] === YansongdaPay::MODE_SERVICE) {        // 服务商模式
+            if (in_array($endpoint, ['mp', 'mini'])) {     // 公众号，或者小程序支付
                 $orderData['payer']['sub_openid'] = $orderData['payer']['openid'] ?? '';
                 unset($orderData['payer']['openid']);
             }
         }
 
-        if ($payMethod == 'wap') {              // 手机网站支付
+        if ($endpoint == 'wap') {              // 手机网站支付
             $orderData['_type'] = 'app';        // 使用 配置中的 app_id 字段
             $orderData['scene_info'] = [
                 'payer_client_ip' => request()->ip(),
@@ -113,19 +124,16 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             ];
         }
 
-        // 配置支付参数
-        YansongdaPay::config($this->payConfig->getFinalConfig($this->getType()));
-
-        return YansongdaPay::wechat()->$payMethod($orderData);
+        return YansongdaPay::wechat()->$endpoint($orderData);
     }
+
+
 
     /**
      * 支付回调
      */
     public function notify(Closure $callback)
     {
-        YansongdaPay::config($this->payConfig->getFinalConfig($this->getType()));
-
         try {
             $originData = YansongdaPay::wechat()->callback(); // 是的，验签就这么简单！
             // {
@@ -192,19 +200,7 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
         }
     }
 
-    /**
-     * 回调成功
-     *
-     * @param  \think\Model  $pay
-     * @param  array  $params
-     * @return \think\Model
-     */
-    public function notifyOk($payRecord, $params)
-    {
-        // 这里啥也不用做
 
-        return $payRecord;
-    }
 
     /**
      * 微信退款

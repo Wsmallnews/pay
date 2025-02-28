@@ -8,6 +8,7 @@ use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentIcon;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Filesystem\Filesystem;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -16,6 +17,8 @@ use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Wsmallnews\Pay\Commands\PayCommand;
 use Wsmallnews\Pay\Components\PayMethods;
+use Wsmallnews\Pay\Models\PayRecord;
+use Wsmallnews\Pay\Models\Refund;
 use Wsmallnews\Pay\Testing\TestsPay;
 
 class PayServiceProvider extends PackageServiceProvider
@@ -26,11 +29,6 @@ class PayServiceProvider extends PackageServiceProvider
 
     public function configurePackage(Package $package): void
     {
-        /*
-         * This class is a Package Service Provider
-         *
-         * More info: https://github.com/spatie/laravel-package-tools
-         */
         $package->name(static::$name)
             ->hasCommands($this->getCommands())
             ->hasInstallCommand(function (InstallCommand $command) {
@@ -47,8 +45,13 @@ class PayServiceProvider extends PackageServiceProvider
             $package->hasConfigFile();
         }
 
+        if (file_exists($package->basePath('/../routes'))) {
+            $package->hasRoutes($this->getRoutes());
+        }
+
         if (file_exists($package->basePath('/../database/migrations'))) {
             $package->hasMigrations($this->getMigrations());
+            $package->runsMigrations();
         }
 
         if (file_exists($package->basePath('/../resources/lang'))) {
@@ -66,11 +69,16 @@ class PayServiceProvider extends PackageServiceProvider
         $this->app->singleton('sn-pay', function ($app) {
             return new PayManager($app);
         });
-
     }
 
     public function packageBooted(): void
     {
+        // 注册模型别名
+        Relation::enforceMorphMap([
+            'sn_pay_record' => PayRecord::class,
+            'sn_pay_refund' => Refund::class,
+        ]);
+
         // Asset Registration
         FilamentAsset::register(
             $this->getAssets(),
@@ -140,7 +148,9 @@ class PayServiceProvider extends PackageServiceProvider
      */
     protected function getRoutes(): array
     {
-        return [];
+        return [
+            // 'web'
+        ];
     }
 
     /**
@@ -157,7 +167,8 @@ class PayServiceProvider extends PackageServiceProvider
     protected function getMigrations(): array
     {
         return [
-            'create_pay_table',
+            '2025_02_18_174455_create_sn_pay_records_table',
+            '2025_02_18_174532_create_sn_pay_refunds_table',
         ];
     }
 }

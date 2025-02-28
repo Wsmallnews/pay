@@ -10,15 +10,15 @@ interface PayConfigInterface
     /**
      * 仅仅获取支付配置参数
      */
-    public function getPayConfig($pay_method): array;
+    public function getPayConfig($tenant = 'default'): array;
 
     /**
      * 获取最终设置支付配置的 config
      */
-    public function getFinalConfig($pay_method): array;
+    public function getFinalConfig(): array;
 
-    /**
-     * 获取支付方法名
-     */
-    public function getPayMethod($pay_method): string;
+    // /**
+    //  * 获取对应平台的支付方法名
+    //  */
+    // public function getPayMethod($platform): string;
 }

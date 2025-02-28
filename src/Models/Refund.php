@@ -2,13 +2,14 @@
 
 namespace Wsmallnews\Pay\Models;
 
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Wsmallnews\Pay\Enums;
 use Wsmallnews\Support\Casts\MoneyCast;
 use Wsmallnews\Support\Models\SupportModel;
 
 class Refund extends SupportModel
 {
-    protected $table = 'sn_pay_records';
+    protected $table = 'sn_pay_refunds';
 
     protected $guarded = [];
 
@@ -29,8 +30,13 @@ class Refund extends SupportModel
         // 'paid_at' => 'timestamp',
     ];
 
-    public function user()
+    /**
+     * 付款人信息 (@sn todo叫付款人还是退款人，后面在考虑)
+     * 
+     * @return MorphTo
+     */
+    public function payer(): MorphTo
     {
-        return $this->belongsTo(config('sn-pay.user_model'), 'user_id');
+        return $this->morphTo();
     }
 }

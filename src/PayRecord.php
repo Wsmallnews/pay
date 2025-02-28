@@ -4,27 +4,29 @@ namespace Wsmallnews\Pay;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Wsmallnews\Pay\Contracts\PayableInterface;
+use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
 use Wsmallnews\Pay\Models\Refund as RefundModel;
 
 class PayRecord
 {
-    protected $pay_type = null;
+    // protected $pay_type = null;
 
     /**
      * payOperator
      */
-    protected PayOperator $payOperator;
+    protected ?PayerInterface $payer;
 
     /**
      * payable
      */
-    protected PayableInterface $payable;
+    protected ?PayableInterface $payable;
 
-    public function __construct(PayOperator $payOperator, ?PayableInterface $payable = null)
+    public function __construct(?PayerInterface $payer = null, ?PayableInterface $payable = null)
     {
-        $this->payOperator = $payOperator;
+        $this->payer = $payer;
 
         $this->payable = $payable;
     }
@@ -38,15 +40,13 @@ class PayRecord
      */
     public function addPay($params)
     {
-        $user = $this->payOperator->getUser() ?? null;
-        $user_mark = $this->payOperator->getUserMark() ?? '';
-
         $payModel = new PayRecordModel;
 
-        // $payModel->scope_type = $this->orderAdapter->getScopeType();
-        // $payModel->store_id = $this->orderAdapter->getStoreId();
-        $payModel->pay_sn = get_sn($user_mark, 'P');
-        $payModel->user_id = $user ? $user->id : 0;
+        $payModel->scope_type = $this->payable->getScopeType();
+        $payModel->scope_id = $this->payable->getScopeId();
+        $payModel->pay_sn = get_sn($this->payer->payerMask(), 'P');
+        $payModel->payer_type = $this->payer->morphType();
+        $payModel->payer_id = $this->payer->morphId();
         $payModel->payable_type = $this->payable->morphType();
         $payModel->payable_id = $this->payable->morphId();
         $payModel->payable_options = $this->payable->morphOptions();
@@ -63,9 +63,13 @@ class PayRecord
         return $payModel;
     }
 
+
+    /**
+     * 三方支付回调成功
+     */
     public function notifyOk($record, $params)
     {
-        // 支付毁掉，填充支付渠道信息
+        // 支付回调，填充支付渠道信息
         $record->status = Enums\PayStatus::Paid;
         $record->transaction_id = $params['transaction_id'];
         $record->buyer_info = $params['buyer_info'];
@@ -102,17 +106,15 @@ class PayRecord
         return $payRecord;
     }
 
+
     /**
-     * 添加 pay 记录
+     * 添加 pay 退款 记录
      *
      * @param  array  $params
      * @return RefundModel
      */
     public function addRefund(PayRecordModel $payRecord, $refund_amount, $params)
     {
-        $user = $this->payOperator->getUser() ?? null;
-        $user_mark = $this->payOperator->getUserMark() ?? '';
-
         $refund_type = $params['refund_type'] ?? 'back';
         $status = $params['status'] ?? Enums\RefundStatus::Ing;
 
@@ -131,11 +133,12 @@ class PayRecord
         }
 
         $refund = new RefundModel;
-        // $refund->scope_type = $pay->scope_type;
-        // $refund->store_id = $pay->store_id;
+        $refund->scope_type = $payRecord->scope_type;
+        $refund->scope_id = $payRecord->scope_id;
         $refund->pay_record_id = $payRecord->id;
-        $refund->refund_sn = get_sn($user_mark, 'R');
-        $refund->user_id = $payRecord->user_id;
+        $refund->refund_sn = get_sn($this->payer->payerMask(), 'R');
+        $refund->payer_type = $this->payer->morphType();
+        $refund->payer_id = $this->payer->morphId();
         $refund->refundable_type = $payRecord->payable_type;
         $refund->refundable_id = $payRecord->payable_id;
         $refund->refundable_options = $payRecord->payable_options;
@@ -168,7 +171,7 @@ class PayRecord
     }
 
     /**
-     * 获取订单已支付金额，商城订单 计算 积分抵扣金额
+     * 获取 payable 已支付金额，商城订单 计算 积分抵扣金额
      *
      * @param  \think\Model  $order
      * @param  string  $order_type
@@ -176,43 +179,25 @@ class PayRecord
      */
     // public function getPaidFee()
     // {
-    //     $table_type = $this->orderAdapter->getType();
-    //     $table_id = $this->orderAdapter->getOrderId();
-    //     $order_type = $this->orderAdapter->getOrderType();
-
-    //     // 锁定读取所有已支付的记录，判断已支付金额
-    //     $pays = PayModel::tableInfo($table_type, $table_id)->orderType($order_type)->paid()->lock(true)->select();
-
-    //     // 商城或者积分商城订单
-    //     $paid_fee = '0';
-    //     foreach ($pays as $key => $pay) {
-    //         if ($pay->pay_type == 'score') {
-    //             // @sn 这里逻辑需要时再补充，下面代码只做参考
-    //             // if ($type == 'order' && $this->orderAdapter->getOrderType() == 'product') {
-    //             //     // 商城类型订单，并且不是积分商城订单，加上积分抵扣真实金额
-    //             //     // $paid_fee = bcadd($paid_fee, $pay->real_fee, 2);
-    //             // } else {
-    //             //     // 其他类型，需要计算积分抵扣的金额时
-    //             // }
-    //         } else {
-    //             $paid_fee = bcadd($paid_fee, $pay->real_fee, 2);
-    //         }
-    //     }
+    //     $paid_fee = PayRecordModel::scopeable($this->payable->getScopeType(), $this->payable->getScopeId())
+    //         ->payable($this->payable->morphType(), $this->payable->morphId())
+    //         ->paid()->lockForUpdate()->sum('real_fee');     // 积分商城支付，real_fee 为 0
 
     //     return $paid_fee;
     // }
 
-    // public function getAllPaidPays($is_lock = true)
+
+
+    // public function getAllPaidPays($is_lock = false)
     // {
-    //     $table_type = $this->orderAdapter->getType();
-    //     $table_id = $this->orderAdapter->getOrderId();
-    //     $order_type = $this->orderAdapter->getOrderType();
+    //     $paidRecords = PayRecordModel::scopeable($this->payable->getScopeType(), $this->payable->getScopeId())
+    //         ->payable($this->payable->morphType(), $this->payable->morphId())
+    //         ->paid()->lockForUpdate()->order('id', 'asc')->get();
 
-    //     // 商城订单，已支付的 pay 记录
-    //     $pays = PayModel::tableInfo($table_type, $table_id)->orderType($order_type)->paid()->lock($is_lock)->order('id', 'asc')->select();
-
-    //     return $pays;
+    //     return $paidRecords;
     // }
+
+
 
     // /**
     //  * 获取剩余可退款的pays 记录（不含积分抵扣）
@@ -251,6 +236,9 @@ class PayRecord
     //     return $pays;
     // }
 
+
+
+
     // /**
     //  * 获取剩余可退款金额，不含积分相关支付
     //  *
@@ -260,7 +248,7 @@ class PayRecord
     // public function getRemainRefundMoney($pays = [])
     // {
     //     // 拿到 所有可退款的支付记录
-    //     $pays = ($pays && $pays instanceof \think\Collection) ? $pays : $this->getCanRefundPays();
+    //     $pays = ($pays && $pays instanceof Collection) ? $pays : $this->getCanRefundPays();
 
     //     // 支付金额，除了已经退完款的金额 （这里不退积分）
     //     $payed_money = (string)array_sum($pays->column('pay_fee'));

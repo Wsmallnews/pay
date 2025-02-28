@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('sn_refunds', function (Blueprint $table) {
+        Schema::create('sn_pay_refunds', function (Blueprint $table) {
             $table->comment('退款');
             $table->engine = 'InnoDB';
             $table->id();
@@ -16,7 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('scope_id')->default(0)->comment('范围');
             $table->unsignedBigInteger('pay_record_id')->default(0)->comment('支付记录');
             $table->string('refund_sn', 60)->unique()->comment('退款单号');
-            $table->unsignedBigInteger('user_id')->default(0)->comment('用户');
+            $table->morphs('payer');
             $table->morphs('refundable');
             $table->json('refundable_options')->nullable()->comment('refundable选项');
             $table->string('pay_method', 20)->comment('支付方式');
@@ -39,6 +39,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('sn_refunds');
+        Schema::dropIfExists('sn_pay_refunds');
     }
 };

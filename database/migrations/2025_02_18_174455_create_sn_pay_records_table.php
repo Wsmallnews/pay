@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('scope_type', 20)->nullable()->comment('范围类型');
             $table->unsignedBigInteger('scope_id')->default(0)->comment('范围');
             $table->string('pay_sn', 60)->unique()->comment('订单号');
-            $table->unsignedBigInteger('user_id')->default(0)->comment('用户');
+            $table->morphs('payer');
             $table->morphs('payable');
             $table->json('payable_options')->nullable()->comment('payable选项');
             $table->string('pay_method', 20)->comment('支付方式');

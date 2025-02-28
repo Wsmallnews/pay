@@ -2,19 +2,28 @@
 
 namespace Wsmallnews\Pay;
 
-use App\Models\User;
 use Closure;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Contracts\PayableInterface;
+use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Contracts\ThirdInterface;
 use Wsmallnews\Pay\Exceptions\PayException;
+use Wsmallnews\Pay\Enums;
+use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
 
 class PayOperator
 {
-    protected $user = null;
 
-    protected string $user_mark = '';
+    /**
+     * payManager
+     *
+     * @var PayManager
+     */
+    protected PayManager $payManager;
 
     /**
      * adapter
@@ -24,62 +33,46 @@ class PayOperator
     /**
      * payable
      */
-    protected PayableInterface $payable;
+    protected ?PayableInterface $payable;
+
+    /**
+     * payer
+     */
+    protected PayerInterface $payer;
 
     /**
      * payRecord
      *
      * @var PayRecord
      */
-    protected PayableInterface $payRecord;
+    protected PayRecord $payRecord;
+
 
     /**
      * 实例化
      *
-     * @param  mixed  $user
+     * @param  PayManager  $payManager
+     * @param AdapterInterface  $adapter
      */
-    public function __construct(AdapterInterface $adapter, PayableInterface $payable)
+    public function __construct(PayManager $payManager, AdapterInterface $adapter)
     {
+        $this->payManager = $payManager;
+
         $this->adapter = $adapter;
 
-        $this->payable = $payable;
+        $this->payable = $payManager->getPayable();
+        
+        $this->payer = $payManager->getPayer();
 
-        $this->payRecord = new PayRecord($this, $payable);
+        $this->payRecord = new PayRecord($this->payer, $this->payable);
     }
 
-    public function setUser($user = null)
-    {
-        // 优先使用传入的用户
-        $this->user = $user ? (is_numeric($user) ? User::get($user) : $user) : Auth::guard()->user();
 
-        $this->user_mark = $this->user ? $this->user->id : (mt_rand(10, 99) . 'n' . mt_rand(100, 999));
-    }
-
-    /**
-     * 获取付款用户
-     *
-     * @return void
-     */
-    public function getUser(): ?User
-    {
-        return $this->user;
-    }
-
-    /**
-     * 获取用户标记
-     *
-     * @return void
-     */
-    public function getUserMark()
-    {
-        return $this->user_mark;
-    }
 
     /**
      * 支付
      *
-     * @param  string  $driver  支付渠道
-     * @param  string  $money  支付金额
+     * @param  string  $amount  支付金额
      * @return object
      */
     public function pay($amount = null)
@@ -120,8 +113,13 @@ class PayOperator
         return $payRecord;
     }
 
+
     /**
      * 三方支付预付款
+     * 
+     * @param  Model  $payRecord
+     * @param  array  $params
+     * @return object
      */
     public function thirdPrepay($payRecord, $params = [])
     {
@@ -139,36 +137,79 @@ class PayOperator
      * @param  array  $notify
      * @return object
      */
-    public function thirdNotify($driver, Closure $callback)
+    public function thirdNotify(Closure $callback = null)
     {
         if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持回调');
         }
 
-        return $this->adapter->notify($callback);
+        return $this->adapter->notify(function ($data, $originData) use ($callback) {
+            Log::write('pay-notify-data:' . json_encode($data));
+
+            $out_trade_no = $data['out_trade_no'];
+
+            // 查询 pay 交易记录
+            $payRecordModel = PayRecordModel::where('pay_sn', $out_trade_no)->find();
+            if (!$payRecordModel || $payRecordModel->status != Enums\PayStatus::Unpaid) {
+                // 订单不存在，或者订单已支付
+                return true;
+            }
+
+            DB::transaction(function () use ($payRecordModel, $data, $originData, $callback) {
+                if ($callback) {
+                    // 自定义回调处理 ， 处理成功请返回  true
+                    return $callback($data, $originData);
+                }
+
+                $params = [
+                    'pay_sn' => $data['out_trade_no'],
+                    'transaction_id' => $data['transaction_id'],
+                    'notify_time' => $data['notify_time'],
+                    'buyer_info' => $data['buyer_info'],
+                    'payment_json' => $originData ? json_encode($originData) : json_encode($data),
+                    'pay_fee' => $data['pay_fee'],          // 微信和抖音的已经*100处理过了
+                    'payment_type' => $this->adapter->getType()              // 支付方式
+                ];
+
+                // 通过 payRecord 获取 payable 实例
+                $this->payable = $this->getPayableByPayRecord($payRecordModel);
+                $this->payManager->payable($this->payable);
+
+                // 完成支付单
+                $payRecordModel = $this->payRecord->notifyOk($payRecordModel, $params);
+
+                // 检测支付
+                if (! $this->payable->isPaid()) {
+                    $this->payable->checkAndPaid();
+                }
+
+                return $payRecordModel;
+            });
+
+            return true;
+        });
     }
+
+
 
     /**
-     * 三方支付回调成功
+     * 通过 payRecord 获取 payable 实例
+     * 
+     * @param  object  $payRecord
+     * @return PayableInterface
      */
-    public function thirdNotifyOk($payRecord, $params = [])
+    private function getPayableByPayRecord($payRecord)
     {
-        if (! $this->adapter instanceof ThirdInterface) {
-            throw new PayException('当前支付类型不支持回调');
-        }
+        // payable 实例
+        $payable_type = $payRecord->payable_type;
+        $payable_id = $payRecord->payable_id;
 
-        $payRecord = $this->adapter->notifyOk($payRecord, $params);
+        $payableClass = Relation::getMorphedModel($payable_type) ?: $payable_type;
 
-        // 完成支付单
-        $payRecord = $this->payRecord->notifyOk($payRecord, $params);
-
-        // 检测支付
-        if (! $this->payable->isPaid()) {
-            $this->payable->checkAndPaid();
-        }
-
-        return $payRecord;
+        return $payableClass::lockForUpdate()->findOrFail($payable_id);     // 加锁读 获取 payable 实例
     }
+
+
 
     /**
      * 退款

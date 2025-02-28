@@ -3,17 +3,12 @@
 namespace Wsmallnews\Pay\Adapters;
 
 use Wsmallnews\Pay\Contracts\AdapterInterface;
+use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Enums;
 use Wsmallnews\Pay\PayManager;
 
 class MoneyAdapter implements AdapterInterface
 {
-    /**
-     * @var User
-     */
-    protected $user = null;
-
-    protected $user_mark = null;
 
     /**
      * PayManager
@@ -22,12 +17,20 @@ class MoneyAdapter implements AdapterInterface
      */
     protected $payManager = null;
 
+
+    /**
+     * payer
+     * 
+     * @var PayerInterface
+     */
+    protected PayerInterface $payer;
+
+
     public function __construct(PayManager $payManager)
     {
         $this->payManager = $payManager;
 
-        // $this->user = $payManager->getUser();
-        // $this->user_mark = $payManager->getUserMark();
+        $this->payer = $payManager->getPayer();
     }
 
     /**
@@ -54,6 +57,8 @@ class MoneyAdapter implements AdapterInterface
         ];
     }
 
+
+    
     public function refund($payRecord, $refund)
     {
         // @sn todo 退回用户余额
