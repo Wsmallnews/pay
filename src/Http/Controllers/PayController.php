@@ -13,13 +13,9 @@ class PayController
         // 1、支付参数如何获得
         // 2、
 
-
         $pay = app('sn-pay');
-        
 
-
-
-        $payManager = new PayManager();
+        $payManager = new PayManager;
         $payManager->setThirdPayConfig(new ShopPayConfig($platform, $payment));     // 设置三方支付配置实例
 
         $result = $payManager->thirdNotify($payment, function ($data, $originData = []) use ($payManager, $payment) {
@@ -29,7 +25,7 @@ class PayController
 
             // 查询 pay 交易记录
             $payModel = PayModel::where('pay_sn', $out_trade_no)->find();
-            if (!$payModel || $payModel->status != PayModel::PAY_STATUS_UNPAID) {
+            if (! $payModel || $payModel->status != PayModel::PAY_STATUS_UNPAID) {
                 // 订单不存在，或者订单已支付
                 return true;
             }
@@ -42,7 +38,7 @@ class PayController
                     'buyer_info' => $data['buyer_info'],
                     'payment_json' => $originData ? json_encode($originData) : json_encode($data),
                     'pay_fee' => $data['pay_fee'],          // 微信和抖音的已经*100处理过了
-                    'pay_type' => $payment              // 支付方式
+                    'pay_type' => $payment,              // 支付方式
                 ];
 
                 // pay 实例

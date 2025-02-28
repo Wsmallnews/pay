@@ -12,16 +12,12 @@ use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Contracts\ThirdInterface;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Pay\Enums;
 use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
 
 class PayOperator
 {
-
     /**
      * payManager
-     *
-     * @var PayManager
      */
     protected PayManager $payManager;
 
@@ -42,17 +38,11 @@ class PayOperator
 
     /**
      * payRecord
-     *
-     * @var PayRecord
      */
     protected PayRecord $payRecord;
 
-
     /**
      * 实例化
-     *
-     * @param  PayManager  $payManager
-     * @param AdapterInterface  $adapter
      */
     public function __construct(PayManager $payManager, AdapterInterface $adapter)
     {
@@ -61,13 +51,11 @@ class PayOperator
         $this->adapter = $adapter;
 
         $this->payable = $payManager->getPayable();
-        
+
         $this->payer = $payManager->getPayer();
 
         $this->payRecord = new PayRecord($this->payer, $this->payable);
     }
-
-
 
     /**
      * 支付
@@ -113,10 +101,9 @@ class PayOperator
         return $payRecord;
     }
 
-
     /**
      * 三方支付预付款
-     * 
+     *
      * @param  Model  $payRecord
      * @param  array  $params
      * @return object
@@ -137,7 +124,7 @@ class PayOperator
      * @param  array  $notify
      * @return object
      */
-    public function thirdNotify(Closure $callback = null)
+    public function thirdNotify(?Closure $callback = null)
     {
         if (! $this->adapter instanceof ThirdInterface) {
             throw new PayException('当前支付类型不支持回调');
@@ -150,7 +137,7 @@ class PayOperator
 
             // 查询 pay 交易记录
             $payRecordModel = PayRecordModel::where('pay_sn', $out_trade_no)->find();
-            if (!$payRecordModel || $payRecordModel->status != Enums\PayStatus::Unpaid) {
+            if (! $payRecordModel || $payRecordModel->status != Enums\PayStatus::Unpaid) {
                 // 订单不存在，或者订单已支付
                 return true;
             }
@@ -168,7 +155,7 @@ class PayOperator
                     'buyer_info' => $data['buyer_info'],
                     'payment_json' => $originData ? json_encode($originData) : json_encode($data),
                     'pay_fee' => $data['pay_fee'],          // 微信和抖音的已经*100处理过了
-                    'payment_type' => $this->adapter->getType()              // 支付方式
+                    'payment_type' => $this->adapter->getType(),              // 支付方式
                 ];
 
                 // 通过 payRecord 获取 payable 实例
@@ -190,11 +177,9 @@ class PayOperator
         });
     }
 
-
-
     /**
      * 通过 payRecord 获取 payable 实例
-     * 
+     *
      * @param  object  $payRecord
      * @return PayableInterface
      */
@@ -208,8 +193,6 @@ class PayOperator
 
         return $payableClass::lockForUpdate()->findOrFail($payable_id);     // 加锁读 获取 payable 实例
     }
-
-
 
     /**
      * 退款

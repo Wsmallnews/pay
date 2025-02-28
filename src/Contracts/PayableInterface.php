@@ -9,26 +9,20 @@ use Illuminate\Database\Eloquent\Model;
  */
 interface PayableInterface
 {
-
     /**
      * payable 的 scope_type
      */
     public function getScopeType(): string;
-
 
     /**
      * payable 的 scope_id
      */
     public function getScopeId(): int;
 
-
     /**
      * payable 的 scope 信息
-     *
-     * @return array
      */
     public function getScopeInfo(): array;
-
 
     /**
      * payable 的 type
@@ -57,7 +51,6 @@ interface PayableInterface
      */
     public function getRemainPayFee(): string;
 
-    
     /**
      * 检测是否支付
      */

@@ -3,8 +3,8 @@
 namespace Wsmallnews\Pay;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
@@ -63,7 +63,6 @@ class PayRecord
         return $payModel;
     }
 
-
     /**
      * 三方支付回调成功
      */
@@ -105,7 +104,6 @@ class PayRecord
 
         return $payRecord;
     }
-
 
     /**
      * 添加 pay 退款 记录
@@ -186,8 +184,6 @@ class PayRecord
     //     return $paid_fee;
     // }
 
-
-
     // public function getAllPaidPays($is_lock = false)
     // {
     //     $paidRecords = PayRecordModel::scopeable($this->payable->getScopeType(), $this->payable->getScopeId())
@@ -196,8 +192,6 @@ class PayRecord
 
     //     return $paidRecords;
     // }
-
-
 
     // /**
     //  * 获取剩余可退款的pays 记录（不含积分抵扣）
@@ -235,9 +229,6 @@ class PayRecord
 
     //     return $pays;
     // }
-
-
-
 
     // /**
     //  * 获取剩余可退款金额，不含积分相关支付

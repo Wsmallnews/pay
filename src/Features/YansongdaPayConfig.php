@@ -9,7 +9,6 @@ use Yansongda\Pay\Pay;
 
 class YansongdaPayConfig implements PayConfigInterface
 {
-
     protected string $pay_method;
 
     protected array $config;
@@ -21,16 +20,12 @@ class YansongdaPayConfig implements PayConfigInterface
         $this->config = $this->formatConfig($config);
     }
 
-
-
     public function getPayConfig($tenant = 'default'): array
     {
         ($this->config[$tenant] ?? []) || throw new PayException("缺少租户 [{$tenant}] 的支付配置");
 
         return $this->config[$tenant];
     }
-
-
 
     public function getFinalConfig(): array
     {
@@ -39,8 +34,6 @@ class YansongdaPayConfig implements PayConfigInterface
 
         return array_merge($yansongdaBaseConfig, [$this->pay_method => $this->config]);
     }
-
-
 
     // @sn todo 具体使用哪种付款方式，由调用方决定，和当前打开平台无关
     // public function getPayEndpoint($platform): string
@@ -59,7 +52,6 @@ class YansongdaPayConfig implements PayConfigInterface
     //     return $method[$platform];
     // }
 
-
     // public function getNotifyUrl()
     // {
     //     return request()->domain() . '/estore/api.pay/notify/payment/' . $this->payment . '/platform/' . $this->platform;
@@ -70,7 +62,6 @@ class YansongdaPayConfig implements PayConfigInterface
     //     return request()->domain() . '/estore/api.pay/refundNotify/payment/' . $this->payment . '/platform/' . $this->platform;
     // }
 
-
     protected function formatConfig($config)
     {
         foreach ($config as $tenant => $payConfig) {
@@ -80,13 +71,12 @@ class YansongdaPayConfig implements PayConfigInterface
         return $config;
     }
 
-
     /**
      * 格式化微信官方渠道配置参数
      */
     protected function formatWechatConfig($payConfig, $type = 'normal')
     {
-        $payConfig['mode'] = (int)($payConfig['mode'] ?? Pay::MODE_NORMAL);       // 格式化为 int
+        $payConfig['mode'] = (int) ($payConfig['mode'] ?? Pay::MODE_NORMAL);       // 格式化为 int
         if ($payConfig['mode'] == Pay::MODE_SERVICE && $type == 'sub_mch') {
             // 服务商模式，但需要子商户直连 ，重新定义 config(商家转账到零钱)
             $payConfig = [
@@ -98,12 +88,7 @@ class YansongdaPayConfig implements PayConfigInterface
             $payConfig['mode'] = Pay::MODE_NORMAL;        // 临时改为普通商户
         }
 
-
-
         // 下面考虑按照 yansongda 的文档，所有 appid 都自己在外面赋值，而不是在下面判断平台
-
-
-
 
         // if ($payConfig['mode'] === Pay::MODE_SERVICE) {
         //     // 首先将平台配置的 app_id 初始化到配置中
@@ -191,7 +176,7 @@ class YansongdaPayConfig implements PayConfigInterface
      */
     protected function formatDouyinConfig($payConfig, $platformPayConfig = [], $type = 'normal')
     {
-        $payConfig['mode'] = (int)($payConfig['mode'] ?? 0);       // 格式化为 int
+        $payConfig['mode'] = (int) ($payConfig['mode'] ?? 0);       // 格式化为 int
 
         $payConfig['mini_app_id'] = $platformPayConfig['app_id'];
 
@@ -206,8 +191,6 @@ class YansongdaPayConfig implements PayConfigInterface
 
         return $payConfig;
     }
-
-    
 
     /**
      * yansongda 基础配置

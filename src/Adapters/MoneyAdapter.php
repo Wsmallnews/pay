@@ -9,7 +9,6 @@ use Wsmallnews\Pay\PayManager;
 
 class MoneyAdapter implements AdapterInterface
 {
-
     /**
      * PayManager
      *
@@ -17,14 +16,10 @@ class MoneyAdapter implements AdapterInterface
      */
     protected $payManager = null;
 
-
     /**
      * payer
-     * 
-     * @var PayerInterface
      */
     protected PayerInterface $payer;
-
 
     public function __construct(PayManager $payManager)
     {
@@ -57,8 +52,6 @@ class MoneyAdapter implements AdapterInterface
         ];
     }
 
-
-    
     public function refund($payRecord, $refund)
     {
         // @sn todo 退回用户余额

@@ -31,66 +31,46 @@ class PayRecord extends SupportModel
         'paid_at' => 'timestamp',
     ];
 
-
-
     /**
      * 付款的记录
-     * 
-     * @param  Builder  $query
-     * @return Builder
      */
     public function scopePaid(Builder $query): Builder
     {
         return $query->where('status', Enums\PayStatus::Paid);
     }
 
-
     /**
      * 付款的记录
-     * 
-     * @param  Builder  $query
-     * @return Builder
      */
     public function scopeUnpaid(Builder $query): Builder
     {
         return $query->where('status', Enums\PayStatus::Unpaid);
     }
 
-
     /**
      * 付款的记录
-     * 
-     * @param  Builder  $query
-     * @return Builder
      */
     public function scopeRefunded(Builder $query): Builder
     {
         return $query->where('status', Enums\PayStatus::Refunded);
     }
 
-
     /**
      * 范围查询
-     * 
-     * @param  Builder  $query
+     *
      * @param  string  $payable_type
      * @param  int  $payable_id
-     * @return Builder
      */
     public function scopePayable(Builder $query, $payable_type, $payable_id = 0): Builder
     {
         return $query->where('payable_type', $payable_type)->where('payable_id', $payable_id);
     }
 
-
     /**
      * 付款人信息
-     * 
-     * @return MorphTo
      */
     public function payer(): MorphTo
     {
         return $this->morphTo();
     }
-
 }

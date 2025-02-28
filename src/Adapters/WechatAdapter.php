@@ -6,11 +6,10 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
-use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Contracts\ThirdInterface;
-use Wsmallnews\Pay\Features\YansongdaPayConfig;
 use Wsmallnews\Pay\Enums;
 use Wsmallnews\Pay\Exceptions\PayException;
+use Wsmallnews\Pay\Features\YansongdaPayConfig;
 use Wsmallnews\Pay\PayManager;
 use Yansongda\Artful\Contract\LoggerInterface;
 use Yansongda\Pay\Pay as YansongdaPay;
@@ -23,7 +22,6 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
      * @var PayManager
      */
     protected $payManager = null;
-
 
     /**
      * @var YansongdaPayConfig
@@ -48,20 +46,16 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
 
     /**
      * 获取当前驱动名
-     * 
-     * @return string
      */
     public function getType(): string
     {
         return 'wechat';
     }
 
-
     /**
      * 付款
      *
-     * @param string $amount
-     * @return array
+     * @param  string  $amount
      */
     public function pay($amount = null): array
     {
@@ -72,13 +66,11 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
         ];
     }
 
-
-
     /**
      * 预支付
-     * 
-     * @param Model $payRecord
-     * @param array $params
+     *
+     * @param  Model  $payRecord
+     * @param  array  $params
      * @return mixed
      */
     public function prepay($payRecord, $params)
@@ -126,8 +118,6 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
 
         return YansongdaPay::wechat()->$endpoint($orderData);
     }
-
-
 
     /**
      * 支付回调
@@ -199,8 +189,6 @@ class WechatAdapter implements AdapterInterface, ThirdInterface
             return 'fail';
         }
     }
-
-
 
     /**
      * 微信退款

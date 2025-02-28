@@ -5,14 +5,12 @@ namespace Wsmallnews\Pay;
 use Wsmallnews\Pay\Adapters\MoneyAdapter;
 use Wsmallnews\Pay\Adapters\WechatAdapter;
 use Wsmallnews\Pay\Contracts\PayableInterface;
-use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Contracts\PayConfigInterface;
+use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Support\AdapterManager;
 
 class PayManager
 {
-
     /**
      * payable 被付款项目，订单等
      */
@@ -27,7 +25,6 @@ class PayManager
      * payConfig
      */
     protected $payConfig;
-
 
     /**
      * The application instance.
@@ -50,12 +47,10 @@ class PayManager
      */
     protected $customCreators = [];
 
-
     public function __construct($app)
     {
         $this->app = $app;
     }
-
 
     public function payer(PayerInterface $payer)
     {
@@ -64,11 +59,10 @@ class PayManager
         return $this;
     }
 
-    public function getPayer(): PayerInterface | null
+    public function getPayer(): ?PayerInterface
     {
         return $this->payer;
     }
-
 
     public function payable(PayableInterface $payable)
     {
@@ -77,7 +71,7 @@ class PayManager
         return $this;
     }
 
-    public function getPayable(): PayableInterface | null
+    public function getPayable(): ?PayableInterface
     {
         return $this->payable;
     }
@@ -102,7 +96,7 @@ class PayManager
      */
     public function getConfig($adapter_type = null)
     {
-        if (!is_null($adapter_type)) {
+        if (! is_null($adapter_type)) {
             ($this->payConfig[$adapter_type] ?? []) || throw new PayException("未找到驱动 [{$adapter_type}] 的配置");
 
             return $this->payConfig[$adapter_type];
@@ -110,7 +104,6 @@ class PayManager
 
         return $this->payConfig;
     }
-
 
     /**
      * 获取一个 driver 实例
@@ -124,7 +117,6 @@ class PayManager
 
         return $this->drivers[$name] = $this->get($name);
     }
-
 
     /**
      * 尝试从缓存中获取 driver 实例
@@ -170,7 +162,6 @@ class PayManager
     {
         return $this->customCreators[$name]();
     }
-
 
     /**
      * 创建一个 wechat 发货实例

@@ -32,8 +32,6 @@ class Refund extends SupportModel
 
     /**
      * 付款人信息 (@sn todo叫付款人还是退款人，后面在考虑)
-     * 
-     * @return MorphTo
      */
     public function payer(): MorphTo
     {
