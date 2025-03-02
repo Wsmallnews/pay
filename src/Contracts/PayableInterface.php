@@ -49,7 +49,7 @@ interface PayableInterface
     /**
      * 获取订单剩余应支付金额
      */
-    public function getRemainPayFee(): string;
+    public function getRemainPayFee(): float;
 
     /**
      * 检测是否支付
