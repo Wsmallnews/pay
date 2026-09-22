@@ -5,6 +5,7 @@ namespace Wsmallnews\Pay;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use think\Model;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
@@ -155,8 +156,8 @@ class PayRecord
     /**
      * 完成退款单
      *
-     * @param  \think\Model  $refund
-     * @return \think\Model
+     * @param  Model  $refund
+     * @return Model
      */
     public function refundCompleted($refund, $params = [])
     {
@@ -171,7 +172,7 @@ class PayRecord
     /**
      * 获取 payable 已支付金额，商城订单 计算 积分抵扣金额
      *
-     * @param  \think\Model  $order
+     * @param  Model  $order
      * @param  string  $order_type
      * @return string
      */

@@ -65,7 +65,7 @@ class YansongdaPayConfig implements PayConfigInterface
     protected function formatConfig($config)
     {
         foreach ($config as $tenant => $payConfig) {
-            $config[$tenant] = $this->{'format' . str::studly($this->pay_method) . 'Config'}($payConfig);
+            $config[$tenant] = $this->{'format' . Str::studly($this->pay_method) . 'Config'}($payConfig);
         }
 
         return $config;

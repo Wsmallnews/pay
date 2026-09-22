@@ -2,6 +2,7 @@
 
 namespace Wsmallnews\Pay;
 
+use Illuminate\Contracts\Foundation\Application;
 use Wsmallnews\Pay\Adapters\MoneyAdapter;
 use Wsmallnews\Pay\Adapters\WechatAdapter;
 use Wsmallnews\Pay\Contracts\PayableInterface;
@@ -29,7 +30,7 @@ class PayManager
     /**
      * The application instance.
      *
-     * @var \Illuminate\Contracts\Foundation\Application
+     * @var Application
      */
     protected $app;
 
