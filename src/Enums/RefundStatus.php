@@ -19,9 +19,9 @@ enum RefundStatus: string implements HasColor, HasLabel
     public function getLabel(): ?string
     {
         return match ($this) {
-            self::Ing => '退款中',
-            self::Completed => '退款完成',
-            self::Fail => '退款失败',
+            self::Ing => __('sn-pay::pay.refund_status.ing'),
+            self::Completed => __('sn-pay::pay.refund_status.completed'),
+            self::Fail => __('sn-pay::pay.refund_status.fail'),
         };
     }
 

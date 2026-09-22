@@ -1,1 +1,6 @@
-@import '../../vendor/filament/filament/resources/css/theme.css';
+/*
+ * pay 包样式入口：只放包自有样式，
+ * 公共 sn-* 工具类由 support 的 index.css 提供。
+ */
+
+@source "../views/**/*";

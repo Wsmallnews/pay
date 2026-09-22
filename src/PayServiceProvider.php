@@ -2,24 +2,19 @@
 
 namespace Wsmallnews\Pay;
 
-use Filament\Support\Assets\AlpineComponent;
 use Filament\Support\Assets\Asset;
-use Filament\Support\Assets\Css;
-use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentIcon;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Filesystem\Filesystem;
-use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
-use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Wsmallnews\Pay\Commands\PayCommand;
-use Wsmallnews\Pay\Components\PayMethods;
-use Wsmallnews\Pay\Models\PayRecord;
-use Wsmallnews\Pay\Models\Refund;
-use Wsmallnews\Pay\Testing\TestsPay;
+use Wsmallnews\Pay\Commands\PayInstallCommand;
+use Wsmallnews\Pay\Livewire\Components\PayMethods;
+use Wsmallnews\Pay\Support\Utils;
+use Wsmallnews\Support\Features\Modules\Module;
+use Wsmallnews\Support\Features\Modules\ModuleRegistry;
 
 class PayServiceProvider extends PackageServiceProvider
 {
@@ -29,15 +24,13 @@ class PayServiceProvider extends PackageServiceProvider
 
     public function configurePackage(Package $package): void
     {
+        /*
+         * This class is a Package Service Provider
+         *
+         * More info: https://github.com/spatie/laravel-package-tools
+         */
         $package->name(static::$name)
-            ->hasCommands($this->getCommands())
-            ->hasInstallCommand(function (InstallCommand $command) {
-                $command
-                    ->publishConfigFile()
-                    ->publishMigrations()
-                    ->askToRunMigrations()
-                    ->askToStarRepoOnGitHub('wsmallnews/pay');
-            });
+            ->hasCommands($this->getCommands());
 
         $configFileName = $package->shortName();
 
@@ -51,7 +44,6 @@ class PayServiceProvider extends PackageServiceProvider
 
         if (file_exists($package->basePath('/../database/migrations'))) {
             $package->hasMigrations($this->getMigrations());
-            $package->runsMigrations();
         }
 
         if (file_exists($package->basePath('/../resources/lang'))) {
@@ -65,7 +57,13 @@ class PayServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
-        // 未配置的支付
+        ModuleRegistry::register(new Module(
+            id: static::$name,
+            namespace: 'Wsmallnews\Pay',
+            plugin: PayPlugin::class,
+        ));
+
+        // 支付管理器（容器单例，app('sn-pay')）
         $this->app->singleton('sn-pay', function ($app) {
             return new PayManager($app);
         });
@@ -75,18 +73,13 @@ class PayServiceProvider extends PackageServiceProvider
     {
         // 注册模型别名
         Relation::enforceMorphMap([
-            'sn_pay_record' => PayRecord::class,
-            'sn_pay_refund' => Refund::class,
+            'sn_pay_record' => Utils::getPayRecordModel(),
+            'sn_pay_refund' => Utils::getRefundModel(),
         ]);
 
         // Asset Registration
         FilamentAsset::register(
             $this->getAssets(),
-            $this->getAssetPackageName()
-        );
-
-        FilamentAsset::registerScriptData(
-            $this->getScriptData(),
             $this->getAssetPackageName()
         );
 
@@ -96,16 +89,24 @@ class PayServiceProvider extends PackageServiceProvider
         // Handle Stubs
         if (app()->runningInConsole()) {
             foreach (app(Filesystem::class)->files(__DIR__ . '/../stubs/') as $file) {
+                if (str_starts_with($file->getFilename(), '.')) {
+                    continue;
+                }
+
                 $this->publishes([
                     $file->getRealPath() => base_path("stubs/pay/{$file->getFilename()}"),
                 ], 'pay-stubs');
             }
         }
 
-        Livewire::component('sn-pay-methods', PayMethods::class);
+        // 注册 livewire 命名空间（自动发现 src/Livewire/ 下的组件）
+        Livewire::addNamespace(
+            namespace: 'sn-pay',
+            classNamespace: 'Wsmallnews\\Pay\\Livewire'
+        );
 
-        // Testing
-        Testable::mixin(new TestsPay);
+        // 兼容旧别名（shop 等调用方的历史引用）
+        Livewire::component('sn-pay-methods', PayMethods::class);
     }
 
     protected function getAssetPackageName(): ?string
@@ -118,11 +119,7 @@ class PayServiceProvider extends PackageServiceProvider
      */
     protected function getAssets(): array
     {
-        return [
-            // AlpineComponent::make('pay', __DIR__ . '/../resources/dist/components/pay.js'),
-            // Css::make('pay-styles', __DIR__ . '/../resources/dist/pay.css'),
-            // Js::make('pay-scripts', __DIR__ . '/../resources/dist/pay.js'),
-        ];
+        return [];
     }
 
     /**
@@ -131,7 +128,7 @@ class PayServiceProvider extends PackageServiceProvider
     protected function getCommands(): array
     {
         return [
-            PayCommand::class,
+            PayInstallCommand::class,
         ];
     }
 
@@ -148,17 +145,7 @@ class PayServiceProvider extends PackageServiceProvider
      */
     protected function getRoutes(): array
     {
-        return [
-            // 'web'
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function getScriptData(): array
-    {
-        return [];
+        return ['web'];
     }
 
     /**
@@ -167,8 +154,8 @@ class PayServiceProvider extends PackageServiceProvider
     protected function getMigrations(): array
     {
         return [
-            '2025_02_18_174455_create_sn_pay_records_table',
-            '2025_02_18_174532_create_sn_pay_refunds_table',
+            'create_sn_pay_records_table',
+            'create_sn_pay_refunds_table',
         ];
     }
 }
