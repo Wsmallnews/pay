@@ -25,12 +25,12 @@ class Refund extends SupportModel
         'refund_fee' => MoneyCast::class . ':currency',
         'real_refund_fee' => MoneyCast::class . ':currency',
 
-        // Enum
+        // Enum（channel/pay_method 保持字符串，原因见 PayRecord）
         'status' => Enums\RefundStatus::class,
     ];
 
     /**
-     * 付款人信息 (@sn todo叫付款人还是退款人，后面在考虑)
+     * 付款人信息（@sn todo 叫付款人还是退款人，后面再考虑）
      */
     public function payer(): MorphTo
     {
@@ -38,11 +38,19 @@ class Refund extends SupportModel
     }
 
     /**
-     * 退款主体
+     * 退款主体（订单等）
      */
     public function refundable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * 所属支付单
+     */
+    public function payRecord(): BelongsTo
+    {
+        return $this->belongsTo(PayRecord::class, 'pay_record_id');
     }
 
     /**

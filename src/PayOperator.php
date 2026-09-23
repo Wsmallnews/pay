@@ -2,274 +2,459 @@
 
 namespace Wsmallnews\Pay;
 
-use Closure;
-use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayerInterface;
-use Wsmallnews\Pay\Contracts\ThirdInterface;
+use Wsmallnews\Pay\Contracts\ThirdAdapterInterface;
+use Wsmallnews\Pay\Data\NotifyPayload;
+use Wsmallnews\Pay\Data\PayPayload;
+use Wsmallnews\Pay\Data\PayResult;
+use Wsmallnews\Pay\Data\RefundPayload;
+use Wsmallnews\Pay\Data\RefundResult;
+use Wsmallnews\Pay\Enums\PayStatus;
+use Wsmallnews\Pay\Enums\RefundStatus;
+use Wsmallnews\Pay\Events\PayFailed;
+use Wsmallnews\Pay\Events\PaySucceeded;
+use Wsmallnews\Pay\Events\RefundFailed;
+use Wsmallnews\Pay\Events\RefundSucceeded;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Pay\Models\PayRecord as PayRecordModel;
+use Wsmallnews\Pay\Models\PayRecord;
+use Wsmallnews\Pay\Models\Refund;
 
+/**
+ * 渠道支付操作器（channel + method 绑定）。
+ *
+ * 职责：支付单/退款单的全部 DB 写入、金额校验、回调幂等处理、状态流转与事件分发；
+ * 适配器只负责渠道交互（SDK 调用 + 结果翻译）。
+ *
+ * 金额一律整数分（订单币种），币种由 payable 快照提供。
+ */
 class PayOperator
 {
-    /**
-     * payManager
-     */
-    protected PayManager $payManager;
+    public function __construct(
+        protected PayManager $payManager,
+        protected AdapterInterface $adapter,
+        protected ?string $method = null,
+    ) {}
 
-    /**
-     * adapter
-     */
-    protected AdapterInterface $adapter;
-
-    /**
-     * payable
-     */
-    protected ?PayableInterface $payable;
-
-    /**
-     * payer
-     */
-    protected PayerInterface $payer;
-
-    /**
-     * payRecord
-     */
-    protected PayRecord $payRecord;
-
-    /**
-     * 实例化
-     */
-    public function __construct(PayManager $payManager, AdapterInterface $adapter)
+    public function getAdapter(): AdapterInterface
     {
-        $this->payManager = $payManager;
-
-        $this->adapter = $adapter;
-
-        $this->payable = $payManager->getPayable();
-
-        $this->payer = $payManager->getPayer();
-
-        $this->payRecord = new PayRecord($this->payer, $this->payable);
+        return $this->adapter;
     }
 
     /**
-     * 支付
-     *
-     * @param  string  $amount  支付金额
-     * @return object
+     * 当前渠道
      */
-    public function pay($amount = null)
+    public function getChannel(): string
     {
-        if ($this->payable->isPaid()) {
-            throw new PayException('订单已支付，无需重复支付');
-        }
-
-        // 剩余应付金额
-        $remain_pay_fee = $this->payable->getRemainPayFee();
-
-        if (is_null($amount)) {
-            // 未传金额，默认剩余支付金额
-            $amount = $remain_pay_fee;
-        }
-
-        if ($amount > $remain_pay_fee) {
-            throw new PayException('支付金额不能大于剩余应支付金额');
-        }
-
-        $adapterResult = $this->adapter->pay($amount);
-
-        // 添加支付记录
-        $payRecord = $this->payRecord->addPay([
-            'pay_method' => $this->adapter->getType(),
-            'pay_fee' => $adapterResult['pay_fee'],
-            'real_fee' => $adapterResult['real_fee'],
-            'transaction_id' => null,
-            'payment_json' => [],
-            'status' => $adapterResult['pay_status'] ?? Enums\PayStatus::Unpaid,
-        ]);
-
-        if ($payRecord->status == Enums\PayStatus::Paid) {
-            // 检测 payable 支付状态 （有些支付方式是直接支付成功的）
-            $this->payable->checkAndPaid();
-        }
-
-        return $payRecord;
+        return $this->adapter->getChannel();
     }
 
-    /**
-     * 三方支付预付款
-     *
-     * @param  Model  $payRecord
-     * @param  array  $params
-     * @return object
-     */
-    public function thirdPrepay($payRecord, $params = [])
-    {
-        if (! $this->adapter instanceof ThirdInterface) {
-            throw new PayException('当前支付类型不支持预付款');
-        }
-
-        return $this->adapter->prepay($payRecord, $params);
-    }
+    // ============================== 支付 ==============================
 
     /**
-     * 三方渠道支付回调
+     * 发起支付。
      *
-     * @param  object  $pay
-     * @param  array  $notify
-     * @return object
+     * @param  int|null  $amount  支付金额（整数分），null = 剩余应支付金额（部分支付/定金模式可传更小金额）
+     * @param  array<string, mixed>  $extra  业务参数（openid、return_url、notify_url 覆盖、_config 租户键等）
      */
-    public function thirdNotify(?Closure $callback = null)
+    public function pay(?int $amount = null, array $extra = []): PayResult
     {
-        if (! $this->adapter instanceof ThirdInterface) {
-            throw new PayException('当前支付类型不支持回调');
+        $payable = $this->requirePayable();
+        $payer = $this->payManager->getPayer();
+
+        if ($payable->isPaid()) {
+            throw new PayException('The payable order is already paid.');
         }
 
-        return $this->adapter->notify(function ($data, $originData) use ($callback) {
-            Log::write('pay-notify-data:' . json_encode($data));
+        $remain = $payable->getRemainPayFee();
 
-            $out_trade_no = $data['out_trade_no'];
+        if ($remain <= 0) {
+            throw new PayException('The payable order has no remaining fee to pay.');
+        }
 
-            // 查询 pay 交易记录
-            $payRecordModel = PayRecordModel::where('pay_sn', $out_trade_no)->find();
-            if (! $payRecordModel || $payRecordModel->status != Enums\PayStatus::Unpaid) {
-                // 订单不存在，或者订单已支付
-                return true;
+        $amount ??= $remain;
+
+        if ($amount <= 0 || $amount > $remain) {
+            throw new PayException("Pay amount [{$amount}] is invalid, remaining is [{$remain}].");
+        }
+
+        $payload = new PayPayload(
+            paySn: $this->makePaySn($payer),
+            amount: $amount,
+            currency: $payable->getPayCurrency(),
+            channel: $this->getChannel(),
+            method: $this->method ?? '',
+            payable: $payable,
+            payer: $payer,
+            walletType: $extra['wallet_type'] ?? null,
+            extra: $extra,
+        );
+
+        $paidNow = false;
+
+        // 余额类支付：钱包扣款（适配器）与支付单落库同事务
+        $payRecord = DB::transaction(function () use ($payload, $payable, $amount, $payer, &$paidNow) {
+            $adapted = $this->adapter->pay($payload);
+
+            $payRecord = new PayRecord;
+            $payRecord->scope_type = $payable->getScopeType();
+            $payRecord->scope_id = $payable->getScopeId();
+            $payRecord->pay_sn = $payload->paySn;
+            $payRecord->payer_type = $payer ? $payer->getMorphClass() : '';
+            $payRecord->payer_id = $payer ? $payer->getKey() : 0;
+            $payRecord->payable_type = $payable->morphType();
+            $payRecord->payable_id = $payable->morphId();
+            $payRecord->payable_options = $payable->morphOptions();
+            $payRecord->pay_method = $payload->method;
+            $payRecord->channel = $payload->channel;
+            $payRecord->currency = $payload->currency;
+            // 金额写入必须用 Money 对象（分）；标量会被 cast 按元解析导致错账
+            $payRecord->pay_fee = sn_money()->fromMinor($amount, $payload->currency);
+            $payRecord->real_fee = sn_money()->fromMinor((int) ($adapted['real_fee'] ?? $amount), $payload->currency);
+            $payRecord->refunded_fee = 0;
+            $payRecord->status = $adapted['status'];
+            $payRecord->paid_at = $adapted['status'] === PayStatus::Paid ? Carbon::now() : null;
+            $payRecord->options = $adapted['options'] ?? [];
+            $payRecord->save();
+
+            if ($adapted['status'] === PayStatus::Paid) {
+                // 余额类支付直接完成
+                $payable->checkAndPaid();
+                $paidNow = true;
             }
 
-            DB::transaction(function () use ($payRecordModel, $data, $originData, $callback) {
-                if ($callback) {
-                    // 自定义回调处理 ， 处理成功请返回  true
-                    return $callback($data, $originData);
-                }
-
-                $params = [
-                    'pay_sn' => $data['out_trade_no'],
-                    'transaction_id' => $data['transaction_id'],
-                    'notify_time' => $data['notify_time'],
-                    'buyer_info' => $data['buyer_info'],
-                    'payment_json' => $originData ? json_encode($originData) : json_encode($data),
-                    'pay_fee' => $data['pay_fee'],          // 微信和抖音的已经*100处理过了
-                    'payment_type' => $this->adapter->getType(),              // 支付方式
-                ];
-
-                // 通过 payRecord 获取 payable 实例
-                $this->payable = $this->getPayableByPayRecord($payRecordModel);
-                $this->payManager->payable($this->payable);
-
-                // 完成支付单
-                $payRecordModel = $this->payRecord->notifyOk($payRecordModel, $params);
-
-                // 检测支付
-                if (! $this->payable->isPaid()) {
-                    $this->payable->checkAndPaid();
-                }
-
-                return $payRecordModel;
-            });
-
-            return true;
+            return $payRecord;
         });
+
+        if ($paidNow) {
+            event(new PaySucceeded($payRecord, $payable));
+
+            return new PayResult($payRecord);
+        }
+
+        // 第三方渠道：发起预下单，SDK 结果由调用方按 method 消费
+        if ($this->adapter instanceof ThirdAdapterInterface) {
+            $sdkResult = $this->adapter->prepay($payRecord, $payload, $extra);
+
+            return new PayResult($payRecord, $sdkResult);
+        }
+
+        throw new PayException('The channel adapter returned an unpaid record without third-party prepay support.');
+    }
+
+    // ============================== 回调 ==============================
+
+    /**
+     * 处理第三方支付回调（验签 → 幂等处理 → 应答）
+     */
+    public function notify(Request $request): Response
+    {
+        if (! $this->adapter instanceof ThirdAdapterInterface) {
+            throw new PayException('The channel adapter does not support notify.');
+        }
+
+        try {
+            $payload = $this->adapter->verifyNotify($request);
+        } catch (\Throwable $e) {
+            Log::channel(config('sn-pay.logger'))->error('pay notify verify failed: ' . $e->getMessage());
+
+            return $this->adapter->buildNotifyResponse(false);
+        }
+
+        return $this->handleNotify($payload);
     }
 
     /**
-     * 通过 payRecord 获取 payable 实例
+     * 处理标准化回调载荷（幂等：已支付单直接应答成功）
+     */
+    public function handleNotify(NotifyPayload $payload): Response
+    {
+        $adapter = $this->requireThirdAdapter();
+
+        $payRecord = PayRecord::where('pay_sn', $payload->paySn)->first();
+
+        if (! $payRecord) {
+            Log::channel(config('sn-pay.logger'))->warning("pay notify received unknown pay_sn [{$payload->paySn}]");
+
+            return $adapter->buildNotifyResponse(false);
+        }
+
+        // 幂等：已支付（或已退款）的单据直接应答成功，防渠道重发重复处理
+        if ($payRecord->status !== PayStatus::Unpaid) {
+            return $adapter->buildNotifyResponse(true);
+        }
+
+        if (! $payload->success) {
+            // 渠道侧交易失败/关闭：应答成功停止重发，广播失败事件
+            event(new PayFailed($payRecord, 'notify reports transaction not success'));
+
+            return $adapter->buildNotifyResponse(true);
+        }
+
+        // 金额/币种防篡改校验
+        if ($payload->amount != sn_money()->minor($payRecord->pay_fee)) {
+            Log::channel(config('sn-pay.logger'))->critical(sprintf(
+                'pay notify amount mismatch: pay_sn [%s], expected [%s], received [%s]',
+                $payload->paySn,
+                $payRecord->pay_fee,
+                $payload->amount
+            ));
+
+            return $adapter->buildNotifyResponse(false);
+        }
+
+        DB::transaction(function () use ($payRecord, $payload) {
+            $payRecord = PayRecord::query()->lockForUpdate()->findOrFail($payRecord->id);
+
+            if ($payRecord->status !== PayStatus::Unpaid) {
+                return;     // 并发双保险
+            }
+
+            $payRecord->status = PayStatus::Paid;
+            $payRecord->real_fee = sn_money()->fromMinor($payload->amount, $payRecord->currency ?? 'CNY');
+            $payRecord->transaction_id = $payload->transactionId;
+            $payRecord->buyer_info = ['buyer' => $payload->buyerInfo];
+            $payRecord->payment_json = ['origin' => $payload->origin];
+            $payRecord->paid_at = Carbon::now();
+            $payRecord->save();
+
+            $payable = $this->resolvePayable($payRecord);
+            $payable->checkAndPaid();
+
+            event(new PaySucceeded($payRecord, $payable));
+        });
+
+        return $adapter->buildNotifyResponse(true);
+    }
+
+    // ============================== 退款 ==============================
+
+    /**
+     * 退款（原路退回）。
      *
-     * @param  object  $payRecord
-     * @return PayableInterface
+     * @param  int|null  $refundFee  退款金额（整数分），null = 该支付单剩余可退全额
+     * @param  array<string, mixed>  $params  remark / refund_type / extra 等附加参数
      */
-    private function getPayableByPayRecord($payRecord)
+    public function refund(PayRecord $payRecord, ?int $refundFee = null, array $params = []): RefundResult
     {
-        // payable 实例
-        $payable_type = $payRecord->payable_type;
-        $payable_id = $payRecord->payable_id;
+        // 重查防止调用方传入陈旧模型（已退金额/状态可能过期）
+        $payRecord = PayRecord::query()->findOrFail($payRecord->id);
 
-        $payableClass = Relation::getMorphedModel($payable_type) ?: $payable_type;
+        $recordChannel = (string) $payRecord->channel;
 
-        return $payableClass::lockForUpdate()->findOrFail($payable_id);     // 加锁读 获取 payable 实例
+        if ($recordChannel !== $this->getChannel()) {
+            throw new PayException("Pay record channel [{$recordChannel}] does not match operator channel [{$this->getChannel()}].");
+        }
+
+        if ($payRecord->status === PayStatus::Unpaid) {
+            throw new PayException('Cannot refund an unpaid pay record.');
+        }
+
+        $remainRefundFee = max(0, sn_money()->minor($payRecord->pay_fee) - sn_money()->minor($payRecord->refunded_fee));
+
+        if ($remainRefundFee <= 0) {
+            throw new PayException('The pay record is fully refunded.');
+        }
+
+        $refundFee ??= $remainRefundFee;
+
+        if ($refundFee <= 0 || $refundFee > $remainRefundFee) {
+            throw new PayException("Refund fee [{$refundFee}] is invalid, remaining refundable is [{$remainRefundFee}].");
+        }
+
+        $payer = $this->payManager->getPayer() ?? $payRecord->payer;
+
+        // 退款单先落库（refund_sn 即渠道侧 out_refund_no）
+        $refund = new Refund;
+        $refund->scope_type = $payRecord->scope_type;
+        $refund->scope_id = $payRecord->scope_id;
+        $refund->pay_record_id = $payRecord->id;
+        $refund->refund_sn = $this->makeRefundSn($payer);
+        $refund->payer_type = $payRecord->payer_type;
+        $refund->payer_id = $payRecord->payer_id;
+        $refund->refundable_type = $payRecord->payable_type;
+        $refund->refundable_id = $payRecord->payable_id;
+        $refund->refundable_options = $payRecord->payable_options;
+        $refund->channel = $payRecord->channel;
+        $refund->pay_method = $payRecord->pay_method;
+        $refund->currency = $payRecord->currency;
+        $refund->refund_fee = sn_money()->fromMinor($refundFee, $payRecord->currency ?? 'CNY');
+        $refund->refund_type = $params['refund_type'] ?? 'back';
+        $refund->refund_method = ($params['refund_type'] ?? 'back') === 'back' ? $payRecord->pay_method : 'balance';
+        $refund->status = RefundStatus::Ing;
+        $refund->remark = $params['remark'] ?? '';
+        $refund->save();
+
+        $payload = new RefundPayload(
+            payRecord: $payRecord,
+            refund: $refund,
+            refundFee: $refundFee,
+            payer: $payer,
+            refundType: $refund->refund_type,
+            remark: $refund->remark,
+            extra: $params['extra'] ?? [],
+        );
+
+        try {
+            $adapted = $this->adapter->refund($payload);
+        } catch (\Throwable $e) {
+            $refund->status = RefundStatus::Fail;
+            $refund->remark = $refund->remark . ' | ' . $e->getMessage();
+            $refund->save();
+
+            event(new RefundFailed($refund, $e->getMessage()));
+
+            throw $e;
+        }
+
+        $result = new RefundResult($refund, $adapted['status'], $adapted['sdk_result'] ?? null, $adapted['options'] ?? []);
+
+        if ($result->isCompleted()) {
+            $refund->status = RefundStatus::Completed;
+            $refund->real_refund_fee = sn_money()->fromMinor($refundFee, $payRecord->currency ?? 'CNY');
+            $refund->save();
+
+            event(new RefundSucceeded($refund, $payRecord));
+        }
+
+        // 累计已退金额；全额退完标记支付单已退款
+        $this->addRefundedFee($payRecord, $refundFee);
+
+        return $result;
     }
 
     /**
-     * 退款
+     * 处理第三方退款回调
      */
-    public function refund($payRecord, $refund_amount = null, $params = [])
+    public function refundNotify(Request $request): Response
     {
-        // @sn todo 这里可以判断下 payRecord 是否已经退完了 （考虑性添加）
-
-        // 如果 refund_money = null 那就是全部退
-        $refund_amount = is_null($refund_amount) ? $payRecord->pay_fee : $refund_amount;
-
-        // @sn todo 判断退款金额是否大于剩余可退款金额
-
-        // 添加退款单
-        $refund = $this->payRecord->addRefund($payRecord, $refund_amount, array_merge($params, [
-        ]));
-
-        // 退款
-        $refundResult = $this->adapter->refund($payRecord, $refund);
-
-        // 增加支付单的退款金额
-        $this->payRecord->addRefundedFee($payRecord, $refund);
-
-        if ($refundResult['refund_status'] == Enums\RefundStatus::Completed) {
-            // 已退款的
-            $refund = $this->payRecord->refundCompleted($refund);
+        if (! $this->adapter instanceof ThirdAdapterInterface) {
+            throw new PayException('The channel adapter does not support refund notify.');
         }
 
-        // 检查pay 记录是否退款完成
-        $pay = $this->payRecord->checkPayAndRefunded($payRecord);
+        $adapter = $this->adapter;
 
-        return $refund;
+        try {
+            $payload = $adapter->verifyRefundNotify($request);
+        } catch (\Throwable $e) {
+            Log::channel(config('sn-pay.logger'))->error('refund notify verify failed: ' . $e->getMessage());
 
-        // $refund = $this->payRecord->addRefund($payRecord, array_merge($data, [
-        //     'user_mark' => $this->user_mark,
-        // ]), $refund_money);
-
-        // // 增加支付单的退款金额
-        // $this->payRecord->addRefundedFee($payRecord, $refund);
-
-        // // 退款
-        // $refundResult = $this->adapter->refund($payRecord, $refund);
-
-        // if ($refundResult['refund_status'] == Enums\RefundStatus::Completed) {
-        //     // 已退款的
-        //     $refund = $this->payRecord->refundCompleted($refund);
-        // }
-
-        // // // 检查pay 记录是否退款完成
-        // $pay = $this->payRecord->checkPayAndRefunded($payRecord);
-
-        // return $refund;
-    }
-
-    public function thirdRefundNotify(Closure $callback)
-    {
-        if (! $this->adapter instanceof ThirdInterface) {
-            throw new PayException('当前支付类型不支持退款回调');
+            return $adapter->buildNotifyResponse(false);
         }
 
-        return $this->adapter->refundNotify($callback);
+        return $this->handleRefundNotify($payload);
     }
 
     /**
-     * 三方退款回调成功
+     * 处理标准化退款回调载荷（幂等）
      */
-    public function thirdRefundNotifyOk($refund, $params = [])
+    public function handleRefundNotify(NotifyPayload $payload): Response
     {
-        if (! $this->adapter instanceof ThirdInterface) {
-            throw new PayException('当前支付类型不支持回调');
+        $adapter = $this->requireThirdAdapter();
+
+        $refund = Refund::where('refund_sn', $payload->refundSn)->first();
+
+        if (! $refund) {
+            Log::channel(config('sn-pay.logger'))->warning("refund notify received unknown refund_sn [{$payload->refundSn}]");
+
+            return $adapter->buildNotifyResponse(false);
         }
 
-        $refund = $this->adapter->refundNotifyOk($refund, $params);
+        if ($refund->status === RefundStatus::Completed) {
+            return $adapter->buildNotifyResponse(true);     // 幂等应答
+        }
 
-        // 完成退款单
-        $refund = $this->payRecord->refundCompleted($refund, $params);
+        if (! $payload->success) {
+            $refund->status = RefundStatus::Fail;
+            $refund->save();
 
-        return $refund;
+            event(new RefundFailed($refund, 'notify reports refund not success'));
+
+            return $adapter->buildNotifyResponse(true);
+        }
+
+        DB::transaction(function () use ($refund, $payload) {
+            $refund = Refund::query()->lockForUpdate()->findOrFail($refund->id);
+
+            if ($refund->status === RefundStatus::Completed) {
+                return;
+            }
+
+            $refund->status = RefundStatus::Completed;
+            $refund->real_refund_fee = $refund->refund_fee;
+            $refund->transaction_id = $payload->transactionId;
+            $refund->payment_json = ['origin' => $payload->origin];
+            $refund->save();
+
+            event(new RefundSucceeded($refund, $refund->payRecord));
+        });
+
+        return $adapter->buildNotifyResponse(true);
+    }
+
+    // ============================== 内部 ==============================
+
+    protected function requirePayable(): PayableInterface
+    {
+        $payable = $this->payManager->getPayable();
+
+        if (! $payable) {
+            throw new PayException('Payable is required, call payable() before paying.');
+        }
+
+        return $payable;
+    }
+
+    protected function requireThirdAdapter(): ThirdAdapterInterface
+    {
+        if (! $this->adapter instanceof ThirdAdapterInterface) {
+            throw new PayException('The channel adapter does not support third-party notify.');
+        }
+
+        return $this->adapter;
+    }
+
+    /**
+     * 通过支付单反查 payable 实例（加锁）
+     */
+    protected function resolvePayable(PayRecord $payRecord): PayableInterface
+    {
+        $payableClass = Relation::getMorphedModel($payRecord->payable_type) ?: $payRecord->payable_type;
+
+        return $payableClass::query()->lockForUpdate()->findOrFail($payRecord->payable_id);
+    }
+
+    /**
+     * 累计支付单已退金额；全额退完时标记已退款
+     */
+    protected function addRefundedFee(PayRecord $payRecord, int $refundFee): void
+    {
+        $payRecord = PayRecord::query()->lockForUpdate()->findOrFail($payRecord->id);
+
+        $refundedFee = sn_money()->minor($payRecord->refunded_fee) + $refundFee;
+        $payRecord->refunded_fee = sn_money()->fromMinor($refundedFee, $payRecord->currency ?? 'CNY');
+
+        if ($refundedFee >= sn_money()->minor($payRecord->pay_fee)) {
+            $payRecord->status = PayStatus::Refunded;
+        }
+
+        $payRecord->save();
+    }
+
+    protected function makePaySn(?PayerInterface $payer): string
+    {
+        return get_sn($payer ? $payer->payerMask() : '0', 'P');
+    }
+
+    protected function makeRefundSn(?PayerInterface $payer): string
+    {
+        return get_sn($payer ? $payer->payerMask() : '0', 'R');
     }
 }

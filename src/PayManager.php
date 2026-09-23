@@ -2,57 +2,68 @@
 
 namespace Wsmallnews\Pay;
 
+use Closure;
+use Illuminate\Contracts\Foundation\Application;
+use Wsmallnews\Pay\Adapters\AlipayAdapter;
 use Wsmallnews\Pay\Adapters\MoneyAdapter;
 use Wsmallnews\Pay\Adapters\WechatAdapter;
+use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayConfigInterface;
 use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Exceptions\PayException;
+use Wsmallnews\Pay\Support\ConfigPayConfig;
 
+/**
+ * 支付管理器（容器单例 sn-pay）。
+ *
+ * 用法：
+ *   app('sn-pay')->payer($member)->payable($order)->channel('wechat', 'h5')->pay(null, ['openid' => ...]);
+ *
+ * 扩展点：
+ *   - PayManager::extend('huifu', HuifuAdapter::class / Closure)：注册自定义渠道（聚合平台、境外渠道等）
+ *   - PayManager::config($payConfig)：临时替换配置源；容器绑定 PayConfigInterface 可全局替换（如数据库配置源）
+ */
 class PayManager
 {
     /**
-     * payable 被付款项目，订单等
-     */
-    protected PayableInterface $payable;
-
-    /**
-     * payer   付款人 用户等
-     */
-    protected PayerInterface $payer;
-
-    /**
-     * payConfig
-     */
-    protected $payConfig;
-
-    /**
      * The application instance.
      *
-     * @var \Illuminate\Contracts\Foundation\Application
+     * @var Application
      */
     protected $app;
 
-    /**
-     * 驱动列表
-     *
-     * @var array
-     */
-    protected $drivers = [];
+    protected ?PayableInterface $payable = null;
+
+    protected ?PayerInterface $payer = null;
 
     /**
-     * 注册的自定义 驱动列表
-     *
-     * @var array
+     * 调用方临时注入的配置源
      */
-    protected $customCreators = [];
+    protected ?PayConfigInterface $payConfig = null;
+
+    /**
+     * 已解析的渠道操作器实例
+     *
+     * @var array<string, PayOperator>
+     */
+    protected array $operators = [];
+
+    /**
+     * 注册的自定义渠道创建器
+     *
+     * @var array<string, Closure|string>
+     */
+    protected array $customCreators = [];
 
     public function __construct($app)
     {
         $this->app = $app;
     }
 
-    public function payer(PayerInterface $payer)
+    // ============================== 上下文 ==============================
+
+    public function payer(PayerInterface $payer): static
     {
         $this->payer = $payer;
 
@@ -64,7 +75,7 @@ class PayManager
         return $this->payer;
     }
 
-    public function payable(PayableInterface $payable)
+    public function payable(PayableInterface $payable): static
     {
         $this->payable = $payable;
 
@@ -77,12 +88,9 @@ class PayManager
     }
 
     /**
-     * 设置三方支付配置类
-     *
-     * @param array payConfig
-     * @return self
+     * 临时替换支付配置源（仅影响当前请求）
      */
-    public function config(array $payConfig)
+    public function config(PayConfigInterface $payConfig): static
     {
         $this->payConfig = $payConfig;
 
@@ -90,118 +98,96 @@ class PayManager
     }
 
     /**
-     * 设置三方支付配置类
-     *
-     * @return PayConfigInterface
+     * 配置源解析：调用方注入 → 容器绑定 → 默认读 sn-pay.php
      */
-    public function getConfig($adapter_type = null)
+    public function getConfig(): PayConfigInterface
     {
-        if (! is_null($adapter_type)) {
-            ($this->payConfig[$adapter_type] ?? []) || throw new PayException("未找到驱动 [{$adapter_type}] 的配置");
-
-            return $this->payConfig[$adapter_type];
+        if ($this->payConfig) {
+            return $this->payConfig;
         }
 
-        return $this->payConfig;
-    }
-
-    /**
-     * 获取一个 driver 实例
-     *
-     * @param  string|null  $name
-     * @return AdapterInterface
-     */
-    public function driver($name)
-    {
-        $name || new PayException('未选择驱动');
-
-        return $this->drivers[$name] = $this->get($name);
-    }
-
-    /**
-     * 尝试从缓存中获取 driver 实例
-     *
-     * @param  string  $name
-     * @return AdapterInterface
-     */
-    protected function get($name)
-    {
-        return $this->drivers[$name] ?? $this->resolve($name);
-    }
-
-    /**
-     * Resolve driver
-     *
-     * @param  string  $name
-     * @param  array|null  $config
-     * @return AdapterInterface
-     *
-     * @throws \InvalidArgumentException
-     */
-    protected function resolve($name)
-    {
-        if (isset($this->customCreators[$name])) {
-            return $this->callCustomCreator($name);
+        if ($this->app->bound(PayConfigInterface::class)) {
+            return $this->app->make(PayConfigInterface::class);
         }
 
-        $driverMethod = 'create' . ucfirst($name) . 'Driver';
+        return $this->app->make(ConfigPayConfig::class);
+    }
+
+    // ============================== 渠道 ==============================
+
+    /**
+     * 获取渠道操作器（channel + method 定位，如 channel('wechat', 'h5')）
+     */
+    public function channel(string $channel, ?string $method = null): PayOperator
+    {
+        if ($channel === '') {
+            throw new PayException('Pay channel is required.');
+        }
+
+        $key = $channel . ':' . ($method ?? '');
+
+        if (! isset($this->operators[$key])) {
+            $this->operators[$key] = new PayOperator($this, $this->resolveAdapter($channel), $method);
+        }
+
+        return $this->operators[$key];
+    }
+
+    /**
+     * 注册自定义渠道（对齐 Laravel cache/queue driver 的 extend 惯例）
+     *
+     * @param  Closure|string  $adapter  适配器类名或创建闭包 fn (PayManager $manager, ?string $method) => AdapterInterface
+     */
+    public static function extend(string $channel, Closure | string $adapter): void
+    {
+        app('sn-pay')->customCreators[$channel] = $adapter;
+    }
+
+    /**
+     * 注册自定义渠道（实例方法形态，供服务提供者链式调用）
+     */
+    public function addChannel(string $channel, Closure | string $adapter): static
+    {
+        $this->customCreators[$channel] = $adapter;
+
+        return $this;
+    }
+
+    protected function resolveAdapter(string $channel): AdapterInterface
+    {
+        if (isset($this->customCreators[$channel])) {
+            $creator = $this->customCreators[$channel];
+
+            if ($creator instanceof Closure) {
+                return $creator($this, null);
+            }
+
+            return $this->app->make($creator, ['payManager' => $this]);
+        }
+
+        $driverMethod = 'create' . ucfirst($channel) . 'Adapter';
 
         if (! method_exists($this, $driverMethod)) {
-            throw new PayException("当前驱动 [{$name}] 不支持.");
+            throw new PayException("Unsupported pay channel [{$channel}], register it via PayManager::extend() first.");
         }
 
         return $this->{$driverMethod}();
     }
 
-    /**
-     * Call a custom driver creator.
-     *
-     * @return Sender
-     */
-    protected function callCustomCreator($name)
+    // ============================== 内置渠道适配器 ==============================
+
+    protected function createWechatAdapter(): AdapterInterface
     {
-        return $this->customCreators[$name]();
+        return new WechatAdapter($this);
     }
 
-    /**
-     * 创建一个 wechat 发货实例
-     *
-     * @param  array  $config
-     * @return PayOperator
-     */
-    public function createWechatDriver()
+    protected function createAlipayAdapter(): AdapterInterface
     {
-        $adapter = new WechatAdapter($this);
-        // $adapter = new WechatAdapter($config);
-
-        return new PayOperator($this, $adapter);
+        return new AlipayAdapter($this);
     }
 
-    public function createMoneyDriver()
+    protected function createMoneyAdapter(): AdapterInterface
     {
-        $adapter = new MoneyAdapter($this);
-
-        return new PayOperator($this, $adapter);
-    }
-
-    public function __call($method, $parameters)
-    {
-        $driver = $parameters[0] ?? '';
-        if (! $driver) {
-            throw new PayException('驱动不存在');
-        }
-        unset($parameters[0]);
-
-        return $this->driver($driver)->$method(...$parameters);
-    }
-
-    /**
-     * Get the default driver name.
-     *
-     * @return string
-     */
-    public function getDefaultDriver()
-    {
-        return '';
+        return new MoneyAdapter($this);
     }
 }

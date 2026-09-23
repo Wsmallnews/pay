@@ -21,52 +21,19 @@ class PayRecord extends SupportModel
         'payable_options' => 'array',
         'buyer_info' => 'array',
         'payment_json' => 'array',
+        'options' => 'array',
 
         // 金额（币种读行内 currency 列）
         'pay_fee' => MoneyCast::class . ':currency',
         'real_fee' => MoneyCast::class . ':currency',
         'refunded_fee' => MoneyCast::class . ':currency',
 
-        // Enum
+        // Enum（channel/pay_method 保持字符串：渠道经 PayManager::extend 可注册任意自定义渠道，
+        // 展示层需要标签时用 PayChannel::tryFrom()/PayMethod::tryFrom() 解析）
         'status' => Enums\PayStatus::class,
 
         'paid_at' => 'timestamp',
     ];
-
-    /**
-     * 付款的记录
-     */
-    public function scopePaid(Builder $query): Builder
-    {
-        return $query->where('status', Enums\PayStatus::Paid);
-    }
-
-    /**
-     * 付款的记录
-     */
-    public function scopeUnpaid(Builder $query): Builder
-    {
-        return $query->where('status', Enums\PayStatus::Unpaid);
-    }
-
-    /**
-     * 付款的记录
-     */
-    public function scopeRefunded(Builder $query): Builder
-    {
-        return $query->where('status', Enums\PayStatus::Refunded);
-    }
-
-    /**
-     * 范围查询
-     *
-     * @param  string  $payable_type
-     * @param  int  $payable_id
-     */
-    public function scopePayable(Builder $query, $payable_type, $payable_id = 0): Builder
-    {
-        return $query->where('payable_type', $payable_type)->where('payable_id', $payable_id);
-    }
 
     /**
      * 付款人信息
@@ -77,10 +44,61 @@ class PayRecord extends SupportModel
     }
 
     /**
+     * 被支付主体（订单等）
+     */
+    public function payable(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    /**
+     * 退款单
+     */
+    public function refunds()
+    {
+        return $this->hasMany(Refund::class, 'pay_record_id');
+    }
+
+    /**
      * 租户
      */
     public function team(): BelongsTo
     {
         return $this->belongsTo(SupportUtils::getTenantModel());
+    }
+
+    /**
+     * 已支付的支付单
+     */
+    public function scopePaid(Builder $query): Builder
+    {
+        return $query->where('status', Enums\PayStatus::Paid);
+    }
+
+    /**
+     * 未支付的支付单
+     */
+    public function scopeUnpaid(Builder $query): Builder
+    {
+        return $query->where('status', Enums\PayStatus::Unpaid);
+    }
+
+    /**
+     * 已退款的支付单
+     */
+    public function scopeRefunded(Builder $query): Builder
+    {
+        return $query->where('status', Enums\PayStatus::Refunded);
+    }
+
+    /**
+     * 按被支付主体过滤
+     *
+     * @param  string  $payable_type
+     * @param  int  $payable_id
+     */
+    public function scopePayable(Builder $query, $payable_type, $payable_id = 0): Builder
+    {
+        return $query->where('payable_type', $payable_type)->where('payable_id', $payable_id);
     }
 }

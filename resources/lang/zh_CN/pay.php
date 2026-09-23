@@ -6,6 +6,23 @@ return [
         'navigation_group' => '支付',
     ],
 
+    'channel' => [
+        'wechat' => '微信支付',
+        'alipay' => '支付宝支付',
+        'money' => '钱包余额支付',
+    ],
+
+    'method' => [
+        'mp' => '微信公众号支付',
+        'mini' => '微信小程序支付',
+        'app' => 'APP支付',
+        'h5' => 'H5支付',
+        'scan' => '扫码支付',
+        'web' => '电脑网站支付',
+        'wap' => '手机网站支付',
+        'balance' => '余额支付',
+    ],
+
     'methods' => [
         'money' => '余额支付',
         'alipay' => '支付宝支付',

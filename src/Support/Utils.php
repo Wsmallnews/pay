@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Wsmallnews\Pay\Support;
 
+use Wsmallnews\Pay\Contracts\PayConfigInterface;
+use Wsmallnews\Pay\Enums\PayChannel;
+use Wsmallnews\Pay\Enums\PayMethod;
 use Wsmallnews\Pay\Exceptions\PayException;
 use Wsmallnews\Support\Data\ScopeableContext;
 use Wsmallnews\Support\Exceptions\InvalidScopeException;
@@ -137,5 +140,46 @@ class Utils
     public static function getFileDirectory(?string $type = null): string
     {
         return self::getConfig('file_directory', 'sn/pay/') . ($type ? $type . '/' : '') . date('Ymd');
+    }
+
+    /**
+     * 可用的支付方式清单（enabled 渠道的 methods 白名单，收银台展示用）。
+     *
+     * @return array<int, array{channel: string, method: string, label: string, icon: mixed, method_label: string}>
+     */
+    public static function getAvailableMethods(): array
+    {
+        $configSource = app()->bound(PayConfigInterface::class)
+            ? app(PayConfigInterface::class)
+            : app(ConfigPayConfig::class);
+
+        $methods = [];
+
+        foreach (self::getConfig('channels', []) as $channel => $channelConfig) {
+            if (! is_array($channelConfig) || ($channelConfig['enabled'] ?? false) !== true) {
+                continue;
+            }
+
+            // 配置源可否决渠道可用性（如 money 通道未绑定 WalletOperator）
+            if (! $configSource->supports($channel)) {
+                continue;
+            }
+
+            $channelEnum = PayChannel::tryFrom($channel);
+
+            foreach ((array) ($channelConfig['methods'] ?? []) as $method) {
+                $methodEnum = PayMethod::tryFrom($method);
+
+                $methods[] = [
+                    'channel' => $channel,
+                    'method' => $method,
+                    'label' => $channelEnum?->getLabel() ?? $channel,
+                    'icon' => $channelEnum?->getIcon(),
+                    'method_label' => $methodEnum?->getLabel() ?? $method,
+                ];
+            }
+        }
+
+        return $methods;
     }
 }

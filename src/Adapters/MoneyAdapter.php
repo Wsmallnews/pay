@@ -3,73 +3,97 @@
 namespace Wsmallnews\Pay\Adapters;
 
 use Wsmallnews\Pay\Contracts\AdapterInterface;
-use Wsmallnews\Pay\Contracts\PayerInterface;
-use Wsmallnews\Pay\Enums;
+use Wsmallnews\Pay\Contracts\WalletOperator;
+use Wsmallnews\Pay\Data\PayPayload;
+use Wsmallnews\Pay\Data\RefundPayload;
+use Wsmallnews\Pay\Enums\PayStatus;
+use Wsmallnews\Pay\Enums\RefundStatus;
+use Wsmallnews\Pay\Exceptions\PayException;
 use Wsmallnews\Pay\PayManager;
 
+/**
+ * 钱包余额支付适配器。
+ *
+ * 依赖 WalletOperator 契约（钱包扩展实现并绑定容器后，经 sn-pay.channels.money.enabled 开启）。
+ * 扣款/回款与支付单落库在同一事务（由 PayOperator::pay 保证），汇率快照固化进 PayRecord.options.wallet。
+ */
 class MoneyAdapter implements AdapterInterface
 {
-    /**
-     * PayManager
-     *
-     * @var PayManager
-     */
-    protected $payManager = null;
+    public function __construct(protected PayManager $payManager) {}
 
-    /**
-     * payer
-     */
-    protected PayerInterface $payer;
-
-    public function __construct(PayManager $payManager)
-    {
-        $this->payManager = $payManager;
-
-        $this->payer = $payManager->getPayer();
-    }
-
-    /**
-     * 获取当前驱动名
-     */
-    public function getType(): string
+    public function getChannel(): string
     {
         return 'money';
     }
 
-    public function pay($money = null): array
+    protected function walletOperator(): WalletOperator
     {
-        // @sn todo 扣除用户余额
-        // WalletService::change($this->user, 'money', -$money, 'order_pay', [
-        //     'order_id' => $this->payManager->getOrderAdapter()->getOrderId(),
-        //     'order_sn' => $this->payManager->getOrderAdapter()->getOrderSn(),
-        //     'order_type' => $this->payManager->getOrderAdapter()->getOrderType(),
-        // ]);
+        if (! app()->bound(WalletOperator::class)) {
+            throw new PayException('Wallet operator is not bound, implement and bind Wsmallnews\Pay\Contracts\WalletOperator to enable the money channel.');
+        }
+
+        return app(WalletOperator::class);
+    }
+
+    protected function walletType(PayPayload | RefundPayload $payload): string
+    {
+        if ($payload instanceof PayPayload && $payload->walletType) {
+            return $payload->walletType;
+        }
+
+        return (string) config('sn-pay.channels.money.wallet_type', 'balance');
+    }
+
+    public function pay(PayPayload $payload): array
+    {
+        // 钱包契约未绑定时优先报通道不可用（渠道可用性检查）
+        $operator = $this->walletOperator();
+
+        $payer = $payload->payer;
+
+        if (! $payer) {
+            throw new PayException('Wallet pay requires a payer.');
+        }
+
+        $walletType = $this->walletType($payload);
+
+        if (! $operator->sufficient($payer, $walletType, $payload->amount, $payload->currency)) {
+            throw new PayException('Insufficient wallet balance.');
+        }
+
+        // 扣减钱包（两跳换算：订单币种 → 本位币 → 钱包币种；快照随明细返回）
+        $deduction = $operator->deduct($payer, $walletType, $payload->amount, $payload->currency, [
+            'pay_sn' => $payload->paySn,
+            'channel' => $payload->channel,
+            'method' => $payload->method,
+        ]);
 
         return [
-            'pay_fee' => $money,
-            'real_fee' => $money,
-            'pay_status' => Enums\PayStatus::Paid,
+            'status' => PayStatus::Paid,
+            'real_fee' => $payload->amount,
+            'options' => ['wallet' => $deduction],
         ];
     }
 
-    public function refund($payRecord, $refund)
+    public function refund(RefundPayload $payload): array
     {
-        // @sn todo 退回用户余额
-        // WalletService::change($pay->user_id, 'money', $refund->refunded_fee, 'order_refund', [
-        //     'refund_id' => $refund->id,
-        //     'refund_sn' => $refund->refund_sn,
-        //     'pay_id' => $pay->id,
-        //     'pay_sn' => $pay->pay_sn,
-        //     'table_type' => $pay->table_type,
-        //     'table_id' => $pay->table_id,
-        //     'order_type' => $pay->order_type,
-        // ]);
+        $payer = $payload->payer ?? $payload->payRecord->payer;
+
+        if (! $payer) {
+            throw new PayException('Wallet refund requires a payer.');
+        }
+
+        // 按支付时快照逆向回款，绝不重新换算
+        $snapshot = $payload->payRecord->options['wallet'] ?? [];
+
+        $credit = $this->walletOperator()->credit($payer, $this->walletType($payload), $payload->refundFee, $payload->payRecord->currency, $snapshot, [
+            'refund_sn' => $payload->refund->refund_sn,
+            'pay_sn' => $payload->payRecord->pay_sn,
+        ]);
 
         return [
-            'refunded_fee' => $refund->refunded_fee,
-            'real_refunded_fee' => $refund->refunded_fee,
-            'refund_status' => Enums\RefundStatus::Completed,
+            'status' => RefundStatus::Completed,
+            'sdk_result' => $credit,
         ];
-
     }
 }

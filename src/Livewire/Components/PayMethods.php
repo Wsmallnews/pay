@@ -2,8 +2,8 @@
 
 namespace Wsmallnews\Pay\Livewire\Components;
 
-use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
+use Wsmallnews\Pay\Support\Utils as PayUtils;
 use Wsmallnews\Support\Concerns\HasColumns;
 
 class PayMethods extends Base
@@ -13,38 +13,40 @@ class PayMethods extends Base
     public ?Model $user;
 
     /**
-     * 可用的支付方式（调用方筛选传入，如 ['money', 'alipay']）
+     * 支付方式筛选（可选）：['wechat:scan', 'money:balance'] 形式的 channel:method 键列表；
+     * 空数组 = 展示配置里全部可用方式
+     *
+     * @var array<int, string>
      */
-    public array $payMethods = [];
+    public array $only = [];
 
     /**
-     * 支持的支付方式清单（value 对应 PayManager 驱动名）
+     * 支持的支付方式清单（配置驱动：sn-pay.channels 的 enabled + methods 白名单）
+     *
+     * @var array<int, array{channel: string, method: string, label: mixed, icon: mixed, method_label: string, value: string}>
      */
-    public array $supportPayMethods = [
-        [
-            'label' => 'sn-pay::pay.methods.money',
-            'value' => 'money',
-            'icon' => Heroicon::OutlinedBanknotes,
-        ],
-        [
-            'label' => 'sn-pay::pay.methods.alipay',
-            'value' => 'alipay',
-            'icon' => Heroicon::OutlinedBuildingLibrary,
-        ],
-        [
-            'label' => 'sn-pay::pay.methods.wechat',
-            'value' => 'wechat',
-            'icon' => Heroicon::OutlinedChatBubbleLeftRight,
-        ],
-    ];
+    public array $supportPayMethods = [];
 
     public ?string $current = null;
 
     public string $type = 'choose';        // manager=管理;choose=选择
 
-    public function mount($columns = null)
+    public function mount($columns = null, $only = [])
     {
         $this->columns($columns);
+        $this->only = (array) $only;
+
+        $this->supportPayMethods = array_values(array_filter(
+            PayUtils::getAvailableMethods(),
+            fn (array $method) => blank($this->only) || in_array($method['channel'] . ':' . $method['method'], $this->only)
+        ));
+
+        // 视图消费统一 value 键（channel:method 复合标识）
+        $this->supportPayMethods = array_map(function (array $method) {
+            $method['value'] = $method['channel'] . ':' . $method['method'];
+
+            return $method;
+        }, $this->supportPayMethods);
     }
 
     public function render()
