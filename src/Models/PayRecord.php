@@ -3,10 +3,12 @@
 namespace Wsmallnews\Pay\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Wsmallnews\Pay\Enums;
 use Wsmallnews\Support\Casts\MoneyCast;
 use Wsmallnews\Support\Models\SupportModel;
+use Wsmallnews\Support\Support\Utils as SupportUtils;
 
 class PayRecord extends SupportModel
 {
@@ -20,10 +22,10 @@ class PayRecord extends SupportModel
         'buyer_info' => 'array',
         'payment_json' => 'array',
 
-        // 金额
-        'pay_fee' => MoneyCast::class,
-        'real_fee' => MoneyCast::class,
-        'refunded_fee' => MoneyCast::class,
+        // 金额（币种读行内 currency 列）
+        'pay_fee' => MoneyCast::class . ':currency',
+        'real_fee' => MoneyCast::class . ':currency',
+        'refunded_fee' => MoneyCast::class . ':currency',
 
         // Enum
         'status' => Enums\PayStatus::class,
@@ -72,5 +74,13 @@ class PayRecord extends SupportModel
     public function payer(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * 租户
+     */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(SupportUtils::getTenantModel());
     }
 }
