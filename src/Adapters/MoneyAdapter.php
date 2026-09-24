@@ -41,6 +41,11 @@ class MoneyAdapter implements AdapterInterface
             return $payload->walletType;
         }
 
+        // 退款按支付时快照的钱包类型回款（快照缺失回落通道配置）
+        if ($payload instanceof RefundPayload) {
+            return (string) ($payload->payRecord->options['wallet']['wallet_type'] ?? config('sn-pay.channels.money.wallet_type', 'balance'));
+        }
+
         return (string) config('sn-pay.channels.money.wallet_type', 'balance');
     }
 
@@ -66,6 +71,7 @@ class MoneyAdapter implements AdapterInterface
             'pay_sn' => $payload->paySn,
             'channel' => $payload->channel,
             'method' => $payload->method,
+            'payable' => ['type' => $payload->payable->morphType(), 'id' => $payload->payable->morphId()],
         ]);
 
         return [
