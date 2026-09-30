@@ -10,9 +10,9 @@ use Wsmallnews\Pay\Adapters\WechatAdapter;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Contracts\PayableInterface;
 use Wsmallnews\Pay\Contracts\PayConfigInterface;
-use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Exceptions\PayException;
 use Wsmallnews\Pay\Support\ConfigPayConfig;
+use Wsmallnews\Support\Contracts\HasSnIdentifiable;
 
 /**
  * 支付管理器（容器单例 sn-pay）。
@@ -35,7 +35,7 @@ class PayManager
 
     protected ?PayableInterface $payable = null;
 
-    protected ?PayerInterface $payer = null;
+    protected ?HasSnIdentifiable $payer = null;
 
     /**
      * 调用方临时注入的配置源
@@ -63,14 +63,14 @@ class PayManager
 
     // ============================== 上下文 ==============================
 
-    public function payer(PayerInterface $payer): static
+    public function payer(HasSnIdentifiable $payer): static
     {
         $this->payer = $payer;
 
         return $this;
     }
 
-    public function getPayer(): ?PayerInterface
+    public function getPayer(): ?HasSnIdentifiable
     {
         return $this->payer;
     }

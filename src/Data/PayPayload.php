@@ -3,7 +3,7 @@
 namespace Wsmallnews\Pay\Data;
 
 use Wsmallnews\Pay\Contracts\PayableInterface;
-use Wsmallnews\Pay\Contracts\PayerInterface;
+use Wsmallnews\Support\Contracts\HasSnIdentifiable;
 
 /**
  * 支付请求载荷（发起一笔支付的全部输入）。
@@ -19,7 +19,7 @@ class PayPayload
         public readonly string $channel,            // 渠道：wechat / alipay / money / 自定义
         public readonly string $method,             // 支付方式（终端）：mp / mini / h5 / app / scan / balance ...
         public readonly PayableInterface $payable,
-        public readonly ?PayerInterface $payer = null,
+        public readonly ?HasSnIdentifiable $payer = null,
         public readonly ?string $walletType = null, // money 通道的钱包类型
         public readonly array $extra = [],          // 业务参数：openid / return_url / notify_url 覆盖 / _config 租户键等
     ) {}

@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 use Wsmallnews\Pay\Contracts\AdapterInterface;
 use Wsmallnews\Pay\Contracts\PayableInterface;
-use Wsmallnews\Pay\Contracts\PayerInterface;
 use Wsmallnews\Pay\Contracts\ThirdAdapterInterface;
 use Wsmallnews\Pay\Data\NotifyPayload;
 use Wsmallnews\Pay\Data\PayPayload;
@@ -26,6 +25,7 @@ use Wsmallnews\Pay\Events\RefundSucceeded;
 use Wsmallnews\Pay\Exceptions\PayException;
 use Wsmallnews\Pay\Models\PayRecord;
 use Wsmallnews\Pay\Models\Refund;
+use Wsmallnews\Support\Contracts\HasSnIdentifiable;
 
 /**
  * 渠道支付操作器（channel + method 绑定）。
@@ -448,13 +448,21 @@ class PayOperator
         $payRecord->save();
     }
 
-    protected function makePaySn(?PayerInterface $payer): string
+    protected function makePaySn(?HasSnIdentifiable $payer): string
     {
-        return get_sn($payer ? $payer->payerMask() : '0', 'P');
+        return get_sn($this->payerMark($payer), 'P');
     }
 
-    protected function makeRefundSn(?PayerInterface $payer): string
+    protected function makeRefundSn(?HasSnIdentifiable $payer): string
     {
-        return get_sn($payer ? $payer->payerMask() : '0', 'R');
+        return get_sn($this->payerMark($payer), 'R');
+    }
+
+    /**
+     * 付款人标识（单号生成用）：身份键；匿名（null）与未落库统一随机兜底（N 标记区分匿名单号）
+     */
+    protected function payerMark(?HasSnIdentifiable $payer): string
+    {
+        return (string) (($payer?->getSnId()) ?: mt_rand(10, 99) . 'N' . mt_rand(100, 999));
     }
 }

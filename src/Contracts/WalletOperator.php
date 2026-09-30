@@ -2,6 +2,8 @@
 
 namespace Wsmallnews\Pay\Contracts;
 
+use Wsmallnews\Support\Contracts\HasSnIdentifiable;
+
 /**
  * 钱包操作契约（余额支付通道的扣款/回款出口）。
  *
@@ -20,7 +22,7 @@ interface WalletOperator
      *
      * @param  int  $minorAmount  订单币种金额（分）
      */
-    public function sufficient(PayerInterface $payer, string $walletType, int $minorAmount, string $orderCurrency): bool;
+    public function sufficient(HasSnIdentifiable $payer, string $walletType, int $minorAmount, string $orderCurrency): bool;
 
     /**
      * 扣减钱包（事务内调用，实现方自行保证原子性）
@@ -31,7 +33,7 @@ interface WalletOperator
      *                              ['wallet_amount' => 7200, 'wallet_currency' => 'POINT',
      *                              'rate' => ['anchor' => '100:1', 'market' => '7.2'], 'transaction_id' => '...']
      */
-    public function deduct(PayerInterface $payer, string $walletType, int $minorAmount, string $orderCurrency, array $meta = []): array;
+    public function deduct(HasSnIdentifiable $payer, string $walletType, int $minorAmount, string $orderCurrency, array $meta = []): array;
 
     /**
      * 回款（退款）：按支付时的快照逆向换算退回钱包
@@ -40,5 +42,5 @@ interface WalletOperator
      * @param  array<string, mixed>  $snapshot  支付时固化在 PayRecord.options.wallet 的快照
      * @return array<string, mixed> 回款明细
      */
-    public function credit(PayerInterface $payer, string $walletType, int $minorAmount, string $orderCurrency, array $snapshot, array $meta = []): array;
+    public function credit(HasSnIdentifiable $payer, string $walletType, int $minorAmount, string $orderCurrency, array $snapshot, array $meta = []): array;
 }
