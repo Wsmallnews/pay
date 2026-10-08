@@ -37,7 +37,7 @@
                     // 选中后向上分发支付启动事件（channel:method 复合标识，由收银台监听处理）
                     const [channel, method] = value.split(':');
 
-                    this.$wire.dispatch('pay-start', {
+                    this.$wire.dispatch('sn-pay-method-selected', {
                         channel,
                         method,
                     });
