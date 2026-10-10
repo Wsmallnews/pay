@@ -1,4 +1,4 @@
-<div class="w-full" x-data="snPayMethods({})">
+<div class="w-full">
     {{-- 支付方式选择网格（原生 Tailwind grid：支付方式数量少，固定响应式两列足够） --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         @foreach ($supportPayMethods as $method)
@@ -10,9 +10,8 @@
                         'border-primary-500 dark:border-primary-400 ring-1 ring-primary-500/30' => $current === $method['value'],
                     ])
                     @if ($type === 'choose' && ($current !== $method['value']))
-                        @click="choose('{{ $method['value'] }}')"
+                        wire:click="choose('{{ $method['value'] }}')"
                     @endif
-                    :aria-pressed="current === '{{ $method['value'] }}' ? 'true' : 'false'"
                 >
                     <span @class([
                         'flex items-center justify-center size-11 rounded-md shrink-0',
@@ -28,21 +27,3 @@
         @endforeach
     </div>
 </div>
-
-@once
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('snPayMethods', () => ({
-                choose(value) {
-                    // 选中后向上分发支付启动事件（channel:method 复合标识，由收银台监听处理）
-                    const [channel, method] = value.split(':');
-
-                    this.$wire.dispatch('sn-pay-method-selected', {
-                        channel,
-                        method,
-                    });
-                },
-            }));
-        });
-    </script>
-@endonce

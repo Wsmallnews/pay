@@ -49,6 +49,19 @@ class PayMethods extends Base
         }, $this->supportPayMethods);
     }
 
+    /**
+     * 选中支付方式 → 通知宿主收银台（channel:method 复合标识）。
+     *
+     * 服务端方法派发（wire:click），不用视图内联 Alpine——SPA（wire:navigate）
+     * 经 morph 更新页面，内联脚本一律不执行（规则见 component-events.md）。
+     */
+    public function choose(string $value): void
+    {
+        [$channel, $method] = explode(':', $value) + [null, null];
+
+        $this->dispatch('sn-pay-method-selected', channel: $channel, method: $method);
+    }
+
     public function render()
     {
         return view('sn-pay::livewire.components.pay-methods', []);
