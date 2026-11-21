@@ -8,8 +8,6 @@ use Wsmallnews\Pay\Contracts\PayConfigInterface;
 use Wsmallnews\Pay\Enums\PayChannel;
 use Wsmallnews\Pay\Enums\PayMethod;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Support\Exceptions\InvalidScopeException;
-use Wsmallnews\Support\Features\Site\SiteContext;
 
 /**
  * Utility class for Pay package configuration and helpers.
@@ -40,8 +38,6 @@ class Utils
     {
         return self::getScopeableContext($key)->scopeId;
     }
-
-
 
     /**
      * Get model class by name.
