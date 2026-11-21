@@ -8,9 +8,8 @@ use Wsmallnews\Pay\Contracts\PayConfigInterface;
 use Wsmallnews\Pay\Enums\PayChannel;
 use Wsmallnews\Pay\Enums\PayMethod;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Support\Data\ScopeableContext;
 use Wsmallnews\Support\Exceptions\InvalidScopeException;
-use Wsmallnews\Support\Support\Utils as SupportUtils;
+use Wsmallnews\Support\Features\Site\SiteContext;
 
 /**
  * Utility class for Pay package configuration and helpers.
@@ -31,50 +30,9 @@ class Utils
     }
 
     /**
-     * Get scopeable configuration as ScopeableContext object.
-     *
-     * @param  string|null  $key  实例键（null = main 默认实例）
-     *
-     * @throws PayException
-     */
-    public static function getScopeableContext(?string $key = null): ScopeableContext
-    {
-        try {
-            return SupportUtils::getScopeFromInstances('sn-pay.scopeables', $key);
-        } catch (InvalidScopeException $e) {
-            throw new PayException('Scopeable configuration error. ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Get scopeable array.
-     *
-     * @param  string|null  $key  实例键（null = main 默认实例）
-     * @return array{scope_type: string, scope_id: int}
-     *
-     * @throws PayException
-     */
-    public static function getScopeable(?string $key = null): array
-    {
-        return self::getScopeableContext($key)->toArray();
-    }
-
-    /**
-     * Get scope type.
-     *
-     * @param  string|null  $key  实例键（null = main 默认实例）
-     *
-     * @throws PayException
-     */
-    public static function getScopeType(?string $key = null): string
-    {
-        return self::getScopeableContext($key)->scopeType;
-    }
-
-    /**
      * Get scope ID.
      *
-     * @param  string|null  $key  实例键（null = main 默认实例）
+     * @param  string|null  $key  子 scope 后缀（null = 当前站点主 scope）
      *
      * @throws PayException
      */
@@ -83,19 +41,7 @@ class Utils
         return self::getScopeableContext($key)->scopeId;
     }
 
-    /**
-     * Get panel register raw config.
-     *
-     * @param  string|null  $type  Register type (pages, resources, global_default) or null for all
-     */
-    public static function getPanelRegister(?string $type = null): mixed
-    {
-        if (blank($type)) {
-            return self::getConfig('panel_register', null);
-        }
 
-        return self::getConfig("panel_register.{$type}", null);
-    }
 
     /**
      * Get model class by name.

@@ -60,7 +60,7 @@ class PayServiceProvider extends PackageServiceProvider
         ModuleRegistry::register(new Module(
             id: static::$name,
             namespace: 'Wsmallnews\Pay',
-            plugin: PayPlugin::class,
+            plugin: null,
         ));
 
         // 支付管理器（容器单例，app('sn-pay')）
