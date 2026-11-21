@@ -8,8 +8,6 @@ use Wsmallnews\Pay\Contracts\PayConfigInterface;
 use Wsmallnews\Pay\Enums\PayChannel;
 use Wsmallnews\Pay\Enums\PayMethod;
 use Wsmallnews\Pay\Exceptions\PayException;
-use Wsmallnews\Support\Exceptions\InvalidScopeException;
-use Wsmallnews\Support\Features\Site\SiteContext;
 
 /**
  * Utility class for Pay package configuration and helpers.
@@ -28,19 +26,6 @@ class Utils
 
         return $name ? (data_get($config, $name) ?? $default) : $config;
     }
-
-    /**
-     * Get scope ID.
-     *
-     * @param  string|null  $key  子 scope 后缀（null = 当前站点主 scope）
-     *
-     * @throws PayException
-     */
-    public static function getScopeId(?string $key = null): int
-    {
-        return self::getScopeableContext($key)->scopeId;
-    }
-
 
 
     /**
